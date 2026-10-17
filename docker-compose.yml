@@ -1,0 +1,37 @@
+name: master-gym-dev
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: mastergym
+      POSTGRES_PASSWORD: mastergym
+      POSTGRES_DB: mastergym
+    ports:
+      - "127.0.0.1:${DB_HOST_PORT}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U mastergym -d mastergym"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: ${APP_IMAGE}
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: "postgres://mastergym:mastergym@postgres:5432/mastergym"
+      SESSION_SECRET: ${SESSION_SECRET}
+      NEXT_SERVER_ACTIONS_ENCRYPTION_KEY: ${NEXT_SERVER_ACTIONS_ENCRYPTION_KEY}
+    ports:
+      - "${APP_HOST_PORT}:3000"
+
+volumes:
+  postgres_data:
