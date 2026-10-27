@@ -4,6 +4,12 @@ Aplikasi kasir dan membership gym. Next.js 16 + PostgreSQL 16 (Drizzle) + shadcn
 dengan fondasi yang sama seperti sembako. Dua role: `kasir` (operasional harian)
 dan `superadmin` (laporan dan data master).
 
+## Dokumentasi
+
+- [docs/HANDOFF.md](docs/HANDOFF.md): konteks proyek, spec, keputusan, status, dan rencana per hari. **Baca ini dulu.**
+- [docs/CODEBASE_OVERVIEW.md](docs/CODEBASE_OVERVIEW.md): apa fungsi tiap file, route, alur request
+- [docs/AUTH.md](docs/AUTH.md) · [docs/DATABASE.md](docs/DATABASE.md) · [docs/UI.md](docs/UI.md) · [docs/DOCKER.md](docs/DOCKER.md)
+
 ## Setup lokal
 
 ```bash
