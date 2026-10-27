@@ -11,18 +11,29 @@ const pool = new Pool({ connectionString: process.env.DATABASE_URL });
 const db = drizzle(pool, { schema });
 
 const DEV_PASSWORD = "password123";
-const DEV_EMAIL = "admin@mastergym.test";
 
 async function main() {
   const passwordHash = await bcrypt.hash(DEV_PASSWORD, 10);
 
-  await db.insert(schema.users).values({
-    name: "Admin",
-    email: DEV_EMAIL,
-    password: passwordHash,
-  });
+  await db.insert(schema.users).values([
+    {
+      name: "Super Admin",
+      email: "superadmin@mastergym.test",
+      password: passwordHash,
+      role: "superadmin",
+    },
+    {
+      name: "Kasir",
+      email: "kasir@mastergym.test",
+      password: passwordHash,
+      role: "kasir",
+    },
+  ]);
 
-  console.log("Seed done. Account:", DEV_EMAIL, "password:", DEV_PASSWORD);
+  console.log(
+    "Seed done. Accounts: superadmin@mastergym.test, kasir@mastergym.test, password:",
+    DEV_PASSWORD,
+  );
 }
 
 main()

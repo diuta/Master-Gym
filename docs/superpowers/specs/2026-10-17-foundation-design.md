@@ -1,5 +1,7 @@
 # Master Gym — Foundation Design
 
+> **Superseded (2026-10-26).** This describes the earlier single-account foundation. Roles, menus, theme and login changed on day 1; see [HANDOFF.md](../../HANDOFF.md) and [CODEBASE_OVERVIEW.md](../../CODEBASE_OVERVIEW.md). Kept for history.
+
 Date: 2026-10-17 · Status: approved and implemented
 
 ## Goal

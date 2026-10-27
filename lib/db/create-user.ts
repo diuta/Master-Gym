@@ -16,11 +16,20 @@ function parseArgs() {
   return args;
 }
 
-async function main() {
-  const { name, email, password } = parseArgs();
+const VALID_ROLES = schema.roleEnum.enumValues;
 
-  if (!name || !email || !password) {
-    console.error("Required: --name --email --password");
+async function main() {
+  const { name, email, password, role } = parseArgs();
+
+  if (!name || !email || !password || !role) {
+    console.error(
+      `Required: --name --email --password --role (${VALID_ROLES.join("|")})`,
+    );
+    process.exit(1);
+  }
+
+  if (!VALID_ROLES.includes(role as (typeof VALID_ROLES)[number])) {
+    console.error(`--role must be one of: ${VALID_ROLES.join(", ")}`);
     process.exit(1);
   }
 
@@ -31,7 +40,12 @@ async function main() {
 
   const [created] = await db
     .insert(schema.users)
-    .values({ name, email, password: passwordHash })
+    .values({
+      name,
+      email,
+      password: passwordHash,
+      role: role as (typeof VALID_ROLES)[number],
+    })
     .returning({ id: schema.users.id, email: schema.users.email });
 
   console.log("User created:", created);
