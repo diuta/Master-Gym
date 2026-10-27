@@ -3,7 +3,8 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { LogOut } from "lucide-react";
-import { navSections } from "@/lib/nav";
+import type { Role } from "@/lib/auth/session";
+import { navForRole } from "@/lib/nav";
 import { logoutAction } from "@/features/authentication/actions";
 import {
   Sidebar,
@@ -18,7 +19,15 @@ import {
   SidebarRail,
 } from "@/components/ui/sidebar";
 
-export function AppSidebar({ name, email }: { name: string; email: string }) {
+export function AppSidebar({
+  name,
+  email,
+  role,
+}: {
+  name: string;
+  email: string;
+  role: Role;
+}) {
   const pathname = usePathname();
 
   return (
@@ -33,7 +42,7 @@ export function AppSidebar({ name, email }: { name: string; email: string }) {
               <div className="flex flex-col gap-0.5 leading-none">
                 <span className="font-semibold">Master Gym</span>
                 <span className="text-xs text-sidebar-foreground/70">
-                  Absensi Member
+                  {role === "kasir" ? "Kasir" : "Super Admin"}
                 </span>
               </div>
             </SidebarMenuButton>
@@ -42,7 +51,7 @@ export function AppSidebar({ name, email }: { name: string; email: string }) {
       </SidebarHeader>
 
       <SidebarContent>
-        {navSections.map((section, sectionIndex) => (
+        {navForRole(role).map((section, sectionIndex) => (
           <SidebarGroup key={section.label ?? sectionIndex}>
             {section.label && (
               <SidebarGroupLabel>{section.label}</SidebarGroupLabel>
