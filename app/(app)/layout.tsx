@@ -5,7 +5,6 @@ import { verifySession } from "@/lib/auth/dal";
 import { db } from "@/lib/db";
 import { users } from "@/lib/db/schema";
 import { AppSidebar } from "@/components/app-sidebar";
-import { ThemeToggle } from "@/components/theme-toggle";
 import {
   SidebarInset,
   SidebarProvider,
@@ -21,7 +20,7 @@ export default async function AppLayout({
   const session = await verifySession();
 
   const [user] = await db
-    .select({ name: users.name, email: users.email })
+    .select({ name: users.name, email: users.email, role: users.role })
     .from(users)
     .where(eq(users.id, session.userId))
     .limit(1);
@@ -32,15 +31,12 @@ export default async function AppLayout({
 
   return (
     <SidebarProvider defaultOpen={sidebarOpen}>
-      <AppSidebar name={user.name} email={user.email} />
+      <AppSidebar name={user.name} email={user.email} role={user.role} />
       <SidebarInset>
         <header className="flex h-12 shrink-0 items-center gap-2 border-b px-4">
           <SidebarTrigger />
           <Separator orientation="vertical" className="h-4" />
           <span className="text-sm text-muted-foreground">Master Gym</span>
-          <div className="ml-auto">
-            <ThemeToggle />
-          </div>
         </header>
         <main className="min-w-0 flex-1 overflow-x-hidden p-6">{children}</main>
       </SidebarInset>
