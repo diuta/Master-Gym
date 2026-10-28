@@ -1,7 +1,9 @@
 import { requireRole } from "@/lib/auth/dal";
-import { PlaceholderPage } from "@/components/placeholder-page";
+import { getCategoryPrices, listActivePackages } from "@/features/membership/queries";
+import { PaymentPage } from "@/features/membership/payment-page";
 
 export default async function Page() {
   await requireRole("kasir");
-  return <PlaceholderPage title="Pembayaran" />;
+  const [packages, prices] = await Promise.all([listActivePackages(), getCategoryPrices()]);
+  return <PaymentPage packages={packages} prices={prices} />;
 }

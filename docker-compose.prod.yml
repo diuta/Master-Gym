@@ -29,8 +29,12 @@ services:
       SESSION_SECRET: ${SESSION_SECRET}
       NEXT_SERVER_ACTIONS_ENCRYPTION_KEY: ${NEXT_SERVER_ACTIONS_ENCRYPTION_KEY}
       NODE_ENV: production
+      UPLOADS_DIR: /app/uploads
     ports:
       - "127.0.0.1:3000:3000"
+    volumes:
+      - uploads_data:/app/uploads
 
 volumes:
   postgres_data:
+  uploads_data:
