@@ -8,10 +8,10 @@ There are two roles, defined once in `lib/db/schema.ts` as the Postgres enum `ro
 
 | Role | Who | Can open |
 |---|---|---|
-| `kasir` | The front-desk cashier. **One shared account.** | Dashboard, Membership (Absen, Riwayat Absen, Data Member, Pembayaran), Inventori, Penjualan, Pembelian, Pengeluaran |
-| `superadmin` | The owner/manager. One account. | Home, Laporan, Pengaturan Harga, Pengaturan Akun |
+| `kasir` | The front-desk cashier. **One shared account.** | Dashboard, Membership (Absen, Riwayat Absen, Data Member, Pembayaran), Inventori, Tambah/Riwayat Penjualan, Tambah/Riwayat Pembelian, Pengeluaran |
+| `superadmin` | The owner/manager. One account. | Home, Laporan, Pengaturan Harga, Riwayat Penjualan, Riwayat Pembelian, Pengeluaran, Pengaturan Akun |
 
-The roles don't overlap: the superadmin does **not** get the cashier's daily-operation pages (the spec says the admin doesn't check members in), and the cashier can't see reports. Both share `/dashboard`, which will show different content per role.
+The roles mostly don't overlap: the superadmin does **not** get the cashier's daily-operation pages (the spec says the admin doesn't check members in), and the cashier can't see reports. The exceptions are the history pages Riwayat Penjualan, Riwayat Pembelian and Pengeluaran, which both roles open. On them, **cancelling a sale or purchase, deleting an expense, and managing expense categories are superadmin-only** (the actions call `requireRole("superadmin")`; the kasir doesn't see the buttons). Everything else on those pages (adding sales, purchases and expenses) is kasir-only. Both share `/dashboard`, which will show different content per role.
 
 The TypeScript type `Role = "superadmin" | "kasir"` lives in `lib/auth/session.ts`. If a role is ever added, change the enum in `schema.ts`, the `Role` type, `navForRole` in `lib/nav.ts`, and run `npm run db:push`.
 

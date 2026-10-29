@@ -77,6 +77,18 @@ const superadminSections: NavSection[] = [
     entries: [{ label: "Pengaturan Harga", href: "/membership/pricing", icon: Tags }],
   },
   {
+    label: "PENJUALAN",
+    entries: [{ label: "Riwayat Penjualan", href: "/sales/history", icon: History }],
+  },
+  {
+    label: "PEMBELIAN",
+    entries: [{ label: "Riwayat Pembelian", href: "/purchases/history", icon: History }],
+  },
+  {
+    label: "KEUANGAN",
+    entries: [{ label: "Pengeluaran", href: "/expenses", icon: Wallet }],
+  },
+  {
     label: "ADMINISTRASI",
     entries: [
       {

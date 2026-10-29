@@ -73,6 +73,7 @@ const payments = z
     }),
   )
   .min(1, { error: "Minimal satu pembayaran." });
+export const PaymentsSchema = payments;
 
 // Shared by every schema that takes money: rows must add up to the price exactly.
 function checkPayments(v: { payments: { amount: number }[]; price: number }, ctx: z.RefinementCtx) {

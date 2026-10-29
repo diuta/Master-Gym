@@ -28,7 +28,14 @@ async function main() {
       password: passwordHash,
       role: "kasir",
     },
-  ]);
+  ]).onConflictDoNothing();
+
+  await db
+    .insert(schema.expenseCategories)
+    .values(
+      ["Listrik", "Air", "Gaji", "Perawatan Alat", "Kebersihan", "Lainnya"].map((name) => ({ name })),
+    )
+    .onConflictDoNothing();
 
   console.log(
     "Seed done. Accounts: superadmin@mastergym.test, kasir@mastergym.test, password:",
