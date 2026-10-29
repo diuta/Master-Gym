@@ -1,6 +1,6 @@
 # Master Gym — Handoff Context
 
-Last updated: 2026-10-28. Read this first when continuing on another PC or in a new AI session.
+Last updated: 2026-10-29. Read this first when continuing on another PC or in a new AI session.
 
 ## 1. What this project is
 
@@ -41,7 +41,7 @@ Code conventions (from the foundation): code, files, routes and DB columns are i
      - **Daftar Member Baru:** a "Kelola Paket" pop-up (add/edit/delete packages). Form: member number (auto), name, phone, birth date, gender, status (Pelajar/Mahasiswa/Umum), package, start date, price, payment method (**split allowed**), camera photo. Button "Daftarkan & Buat QR".
      - **Visit (Harian):** name, phone, visit price, payment method (split).
      - **Perpanjang Member (renewal):** search or scan a member; old data fills in (photo, number, name, birth date, gender, phone); cashier updates status, package, price, payment (split).
-     - **Add-On:** a "Kelola Trainer & Paket Tambahan" pop-up for Trainer data (name, phone) and PT programs (6/12/24/36 sessions or per visit, with a price). Form: search or scan a member, PT package, sessions, price, payment (split). *(Corporate package: ON HOLD, don't build.)*
+     - **Add-On:** a "Kelola Trainer & Paket Tambahan" pop-up for Trainer data (name, phone) and PT programs (6/12/24/36 sessions or per visit, with a price) *(originally requested in Add-On; built in Pengaturan Harga (superadmin) as two pop-ups, Kelola Trainer and Kelola Program PT)*. Form: search or scan a member, PT package, sessions, price, payment (split). *(Corporate package: ON HOLD, don't build.)*
 3. **Inventori:** summary panel (total products, stock value, low/empty stock); search, category filter, "Kelola Kategori"; table: name, category, stock, min, sale price, cost price, stock value, status, edit. A 3-step add-product wizard.
 4. **Penjualan:** a 4-step wizard: info (auto invoice number, buyer optional, date, notes) → items → payment Cash/Bank (split, **no credit/piutang**) → review.
 5. **Riwayat Penjualan:** period and product filters; table: date, invoice, items, total, buyer, cashier, method, status, detail.
@@ -66,8 +66,7 @@ A one-page **PDF** with QR code, name, member ID, phone, expiry date and photo. 
 | Layout | Sidebar like Sembako; on phones it becomes a slide-out menu (desktop + phone supported) |
 | Theme | **Dark only**, navy + orange. The colours are **placeholders** until the user sends the logo |
 | Corporate package | On hold |
-| PT sessions | At check-in, a checkbox "use PT this session" takes one session off the member's remaining PT sessions |
-| Renewal | The new period starts the day after the current one ends (or today if it has already expired) |
+| Renewal | The new period starts at max(latest end date + 1 day, today WIB). No start-date picker. The price is read-only (package + chosen category) |
 | Package prices | Each category (Pelajar/Mahasiswa/Umum) has a monthly base price; price = base × package months. The **superadmin** sets base prices and manages packages in Membership → Pengaturan Harga; the cashier can't change either |
 | QR content | A **random token**, not the member number or personal data (QR codes can be read by any phone) |
 | Hosting | Will be online later. Not a concern yet |
@@ -80,32 +79,40 @@ A one-page **PDF** with QR code, name, member ID, phone, expiry date and photo. 
 | Member photo | **Required** at registration |
 | PDF/QR libraries | `qrcode` + `jspdf` approved |
 | Member check-in | Scan → pop-up with photo + name; the admin compares the person to the photo, then clicks **Check-In** (never automatic) |
-| Visitor check-in | **Not** automatic on payment: the admin checks the visitor in separately on the Absen page |
+| Visitor check-in | **Automatic** when the Visit payment is saved (a visitor has no photo to compare); the visit row is the check-in |
 | Locker number | Optional |
-| Expired members | Blocked from check-in (pop-up shows "Expired", button disabled) |
+| Repeat check-in same day | A second scan the same day **warns** ("Sudah check-in hari ini jam …") but is allowed |
+| Trainer | Chosen **at check-in** when "Pakai PT" is ticked, not at purchase |
+| PT sessions | At check-in, a checkbox "use PT this session" takes one session off the member's remaining PT sessions. Sessions never expire. A "per visit" program = 1 session. The balance is computed (purchased − check-ins with a trainer), not stored |
+| Visit, PT prices, trainers | Visit price, PT program prices and trainers are managed by the **superadmin** (Pengaturan Harga); the kasir never types a price |
+| Expired members | Blocked from check-in: the pop-up shows "Expired", Check-In is disabled (also refused on the server), and **Perpanjang** opens the renewal form with that member selected |
 
-## 5. Current state (end of day 2)
+## 5. Current state (end of day 3)
 
-Day 2 (member registration) is built, verified and through its final review/fix pass. The dev DB was wiped and reseeded on 2026-10-28 because it predated day 1.
+Days 2 and 3 are built and verified. Day 3 (check-in, visit, renewal, PT) was run in a browser as kasir and superadmin with a simulated scanner (typing the token + Enter). The dev DB was wiped and reseeded on 2026-10-28 because it predated day 1; day 3 added tables with `npm run db:push`.
 
 **Done**
 - Day 1 (foundation): roles, `requireRole()`, sidebar menus per role, 13 pages, dark navy/orange theme, seed accounts `superadmin@mastergym.test` / `kasir@mastergym.test` (password `password123`, dev only).
-- Day 2 code in `features/membership/` (logic and validation have unit tests, run with `npm test`); 4 new tables (`packages`, `members`, `memberships`, `payments`) and the `member_no_seq` sequence; `lib/uploads.ts` + `/api/uploads/[...path]` (photos, kasir only) + the Docker `uploads_data` volume.
-- **Pembayaran:** the Daftar Member Baru wizard (details, webcam photo, package + read-only price, split payment, review) via `registerMemberAction`; the server recomputes the price and rejects a stale one ("Harga sudah berubah, muat ulang halaman."); duplicate phone numbers are handled.
-- **Pengaturan Harga** (superadmin, `/membership/pricing`): monthly base price per category (`category_prices` table) and the Kelola Paket pop-up (packages are name + months only).
-- **Member PDF card** (90×160 mm, QR + photo + details) downloaded in the browser with `jspdf` + `qrcode`.
-- **Data Member:** list with search, status filter (Aktif / Segera Habis / Sudah Habis) and an Edit dialog (including photo retake).
-- Verified by the controller in a browser as kasir with a simulated webcam: package add/delete, full registration with split payment, duplicate-phone handling, PDF card (QR decodes to `qr_token`), Data Member statuses/filters/search, Edit with photo retake, superadmin redirected away from the membership pages.
-- Docker: image builds, app answers on :3002, `/app/uploads` is owned by `nextjs`, app restarts cleanly.
+- Day 2 (member registration): `features/membership/` with unit tests (`npm test`); Daftar Member Baru wizard, Pengaturan Harga (category base prices, Kelola Paket), member PDF card, Data Member with Edit, photo uploads (`lib/uploads.ts`, `/api/uploads/[...path]`, Docker `uploads_data` volume). Docker image builds and runs on :3002.
+- **Absen** (`/membership/check-in`): one input that keeps focus; scan a token or type a phone (`+62 …` works) → pop-up with photo, status, days left, locker, "Pakai PT" + trainer when PT balance > 0 → Check-In. Today's list below. Expired members are blocked. Same-day repeat warns.
+- **Riwayat Absen** (`/membership/attendance`): members and visitors for one date, with PT trainer shown.
+- **Pembayaran** has four forms via `?form=new|visit|renew|addon&member=`: Visit (automatic check-in, split payment), Perpanjang Member, Add-On PT. All prices are recomputed on the server; a stale price returns "Harga sudah berubah, muat ulang halaman."
+- **Pengaturan Harga** (superadmin): Harga Visit, Kelola Trainer, Kelola Program PT.
+- **Data Member:** Total Kehadiran column, Detail dialog (PT balance + check-in history), Visitor filter.
+- 6 new tables and `payments` links, see [DATABASE.md](./DATABASE.md).
 
 **Not done / known gaps**
 - Test with the real USB scanner and the real webcam on the front-desk PC.
 - The webcam needs HTTPS if the app is opened over the LAN (`localhost` is fine).
-- Orphan photo files are kept when a member's photo is replaced (shortcut; clean up later if disk matters).
-- Data Member loads all members at once (shortcut; add pagination if the list gets long).
+- No cancel/refund for visits, renewals or PT purchases.
+- Riwayat Absen shows one date at a time.
+- Impossible dates such as `2026-02-31` in the URL roll over to the next month.
+- No pagination in Data Member, Visitor list or attendance (shortcut; add it if lists get long).
+- Orphan photo files are kept when a member's photo is replaced (shortcut).
 - The real logo and colours are pending (send the logo → update `app/globals.css` and the "M" badge in `components/app-sidebar.tsx`).
 - `docs/superpowers/specs/2026-10-17-foundation-design.md` is outdated (it describes the old single-account version).
 - `package-lock.json` must be regenerated with npm 10 (the Docker image's npm): a lock written by npm 11 made `npm ci` fail in Docker (missing optional `esbuild` entries). If it happens again: `docker run --rm -v "$PWD":/w -w /w node:20-alpine npm install --package-lock-only --ignore-scripts`.
+- Dev note: `next dev` (Turbopack) sometimes keeps a stale module after new server exports/actions are added. Symptom: `… is not a function` or `Cannot read properties of undefined (reading 'apply')`. Restart `npm run dev`.
 
 ## 6. Set up on a new PC
 
@@ -138,7 +145,7 @@ Build order for the remaining days: **day 2** members → **day 3** check-in, at
 
 **Day 2 is done when:** the cashier can create packages, register a member with a photo and a split payment, download that member's PDF, and find the member in Data Member with the right status.
 
-## 8. Day 3: check-in and the other membership payments
+## 8. Day 3: check-in and the other membership payments (done, kept for reference)
 
 Pages: `/membership/check-in`, `/membership/attendance`, and the remaining forms in `/membership/payment`. The detail is in section 3 (Kasir → Membership).
 
@@ -152,13 +159,9 @@ Pages: `/membership/check-in`, `/membership/attendance`, and the remaining forms
 3. **Data Member "Detail" button** (from day 2): that member's attendance history.
 4. **Pembayaran → Visit (Harian):** name, phone, price, split payment. Saves a visitor check-in for today.
 5. **Pembayaran → Perpanjang Member (renewal):** search or scan a member; old data shown read-only; the cashier picks category, package, price, split payment. The new period starts the day after the current end date, or today if already expired.
-6. **Pembayaran → Add-On (Personal Trainer):** a "Kelola Trainer & Paket Tambahan" pop-up with Trainer data (name, phone) and PT programs (6/12/24/36 sessions or per visit, with price). Form: search or scan a member, PT program, sessions, price, split payment. Adds sessions to the member's PT balance. **Corporate package is on hold, so don't build it.**
+6. **Pembayaran → Add-On (Personal Trainer):** Trainer data (name, phone) and PT programs (6/12/24/36 sessions or per visit, with price) are managed by the superadmin in Pengaturan Harga, as two pop-ups: Kelola Trainer and Kelola Program PT (not in the Add-On form). Form: search or scan a member, PT program, sessions, price, split payment. Adds sessions to the member's PT balance. **Corporate package is on hold, so don't build it.**
 
-**Ask before starting day 3**
-1. Can a member check in more than once per day? If not, block it or just warn?
-2. Is a trainer chosen when PT is bought, or when it's used at check-in?
-3. Do "per visit" PT programs count as 1 session each?
-4. Do visitors need anything printed or shown (e.g. a receipt), or only a record?
+**Day 3 questions:** all answered on 2026-10-29, see the table in section 4 (repeat check-in warns, trainer at check-in, per visit = 1 session; visitors only need a record, no receipt).
 
 **Day 3 is done when:** scanning a member's PDF QR with the real scanner opens their pop-up and checks them in; the phone-number fallback works; visits, renewals and PT add-ons save with split payments; Riwayat Absen shows members and visitors.
 

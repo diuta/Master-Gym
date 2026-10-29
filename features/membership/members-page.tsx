@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { AlertCircle, Download, Pencil, Search, Users } from "lucide-react";
+import { AlertCircle, Download, Eye, Pencil, Search, Users } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -16,36 +16,43 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { formatDateId, formatTimeWib } from "@/lib/format";
 import { useSort } from "@/hooks/use-sort";
 import { EditMemberDialog } from "./edit-member-dialog";
+import { MemberDetailDialog } from "./member-detail-dialog";
 import { downloadMemberPdf } from "./member-pdf";
-import { normalizePhone } from "./logic";
-import type { MemberRow } from "./queries";
+import { normalizePhone, todayWib } from "./logic";
+import type { MemberRow, VisitorRow } from "./queries";
 import type { MembershipStatus } from "./validation";
 
-const STATUS_KIND: Record<MembershipStatus, StatusKind> = {
+export const STATUS_KIND: Record<MembershipStatus, StatusKind> = {
   active: "member_active",
   expiring: "member_expiring",
   expired: "member_expired",
 };
 
-const FILTERS: { value: MembershipStatus | "all"; label: string }[] = [
+type Filter = MembershipStatus | "all" | "visitor";
+
+const FILTERS: { value: Filter; label: string }[] = [
   { value: "all", label: "Semua" },
   { value: "active", label: "Aktif" },
   { value: "expiring", label: "Habis ≤ 7 Hari" },
   { value: "expired", label: "Sudah Habis" },
+  { value: "visitor", label: "Visitor" },
 ];
 
 function sortValue(m: MemberRow, key: string): string | number {
   if (key === "daysRemaining") return m.daysRemaining;
+  if (key === "totalCheckIns") return m.totalCheckIns;
   if (key === "name") return m.name;
   return m.memberNo;
 }
 
-export function MembersPage({ members }: { members: MemberRow[] }) {
+export function MembersPage({ members, visitors }: { members: MemberRow[]; visitors: VisitorRow[] }) {
   const [query, setQuery] = useState("");
-  const [filter, setFilter] = useState<MembershipStatus | "all">("all");
+  const [filter, setFilter] = useState<Filter>("all");
   const [editing, setEditing] = useState<MemberRow | null>(null);
+  const [viewing, setViewing] = useState<MemberRow | null>(null);
   const [pdfPendingId, setPdfPendingId] = useState<number | null>(null);
   const [pdfError, setPdfError] = useState(false);
 
@@ -57,7 +64,7 @@ export function MembersPage({ members }: { members: MemberRow[] }) {
     const phoneQ = normalizePhone(q) ?? digits;
     return members.filter(
       (m) =>
-        (filter === "all" || m.status === filter) &&
+        (filter === "all" || filter === "visitor" || m.status === filter) &&
         (q === "" ||
           m.name.toLowerCase().includes(q) ||
           (phoneQ !== "" && m.phone.includes(phoneQ)) ||
@@ -65,6 +72,17 @@ export function MembersPage({ members }: { members: MemberRow[] }) {
     );
   }, [members, query, filter]);
   const { sortedRows, sort, toggleSort } = useSort(filtered, sortValue);
+
+  const filteredVisitors = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    const digits = q.replace(/[\s.-]/g, "");
+    const phoneQ = normalizePhone(q) ?? digits;
+    return visitors.filter(
+      (v) =>
+        q === "" || v.name.toLowerCase().includes(q) || (phoneQ !== "" && v.phone.includes(phoneQ)),
+    );
+  }, [visitors, query]);
+  const showVisitors = filter === "visitor";
 
   async function handlePdf(m: MemberRow) {
     setPdfPendingId(m.id);
@@ -87,7 +105,7 @@ export function MembersPage({ members }: { members: MemberRow[] }) {
           <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
           <Input
             className="h-11 pl-9 text-base"
-            placeholder="Cari nama, No. HP, atau nomor member"
+            placeholder={showVisitors ? "Cari nama atau No. HP" : "Cari nama, No. HP, atau nomor member"}
             aria-label="Cari nama, No. HP, atau nomor member"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
@@ -116,7 +134,45 @@ export function MembersPage({ members }: { members: MemberRow[] }) {
         </Alert>
       )}
 
-      {sortedRows.length === 0 ? (
+      {showVisitors ? (
+        filteredVisitors.length === 0 ? (
+          <EmptyState
+            icon={Users}
+            title={visitors.length === 0 ? "Belum ada visitor" : "Visitor tidak ditemukan"}
+            description={
+              visitors.length === 0
+                ? "Visitor tercatat lewat menu Pembayaran."
+                : "Coba kata kunci lain."
+            }
+            className="rounded-xl border bg-card"
+          />
+        ) : (
+          <div className="rounded-xl border bg-card">
+            <Table className="text-base">
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Nama</TableHead>
+                  <TableHead>No. HP</TableHead>
+                  <TableHead>Jumlah Kunjungan</TableHead>
+                  <TableHead>Kunjungan Terakhir</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {filteredVisitors.map((v) => (
+                  <TableRow key={v.phone}>
+                    <TableCell className="font-medium">{v.name}</TableCell>
+                    <TableCell>{v.phone}</TableCell>
+                    <TableCell>{v.visits}</TableCell>
+                    <TableCell>
+                      {formatDateId(todayWib(v.lastVisitAt))} {formatTimeWib(v.lastVisitAt)}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+        )
+      ) : sortedRows.length === 0 ? (
         <EmptyState
           icon={Users}
           title={members.length === 0 ? "Belum ada member" : "Member tidak ditemukan"}
@@ -144,6 +200,9 @@ export function MembersPage({ members }: { members: MemberRow[] }) {
                 <SortableTh sortKey="daysRemaining" sort={sort} onSort={toggleSort}>
                   Sisa Hari
                 </SortableTh>
+                <SortableTh sortKey="totalCheckIns" sort={sort} onSort={toggleSort}>
+                  Total Kehadiran
+                </SortableTh>
                 <TableHead>Aksi</TableHead>
               </TableRow>
             </TableHeader>
@@ -165,8 +224,18 @@ export function MembersPage({ members }: { members: MemberRow[] }) {
                       ? `Lewat ${-m.daysRemaining} hari`
                       : `${m.daysRemaining} hari`}
                   </TableCell>
+                  <TableCell>{m.totalCheckIns}</TableCell>
                   <TableCell>
                     <div className="flex gap-2">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        className="h-11"
+                        onClick={() => setViewing(m)}
+                      >
+                        <Eye />
+                        Detail
+                      </Button>
                       <Button
                         type="button"
                         variant="outline"
@@ -195,6 +264,9 @@ export function MembersPage({ members }: { members: MemberRow[] }) {
         </div>
       )}
 
+      {viewing && (
+        <MemberDetailDialog key={viewing.id} member={viewing} onClose={() => setViewing(null)} />
+      )}
       {editing && (
         <EditMemberDialog key={editing.id} member={editing} onClose={() => setEditing(null)} />
       )}

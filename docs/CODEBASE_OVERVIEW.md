@@ -2,7 +2,7 @@
 
 [Back to README](../README.md) · Related docs: [AUTH](./AUTH.md) · [DATABASE](./DATABASE.md) · [UI](./UI.md) · [DOCKER](./DOCKER.md) · [HANDOFF](./HANDOFF.md)
 
-This document explains **what every part of the code does, where it lives, and how a request flows through it**. It describes the code as of the end of day 2 (2026-10-28): login, roles, layout, member registration (packages, wizard, PDF card, Data Member) and placeholder pages for the rest. Update it when a feature lands.
+This document explains **what every part of the code does, where it lives, and how a request flows through it**. It describes the code as of the end of day 3 (2026-10-29): login, roles, layout, member registration (packages, wizard, PDF card, Data Member), check-in, visits, renewals, PT add-ons and placeholder pages for the rest. Update it when a feature lands.
 
 ---
 
@@ -56,7 +56,7 @@ master-gym/
 │       └── administration/account-settings/   (superadmin)
 ├── features/                 Business code, grouped by domain
 │   ├── authentication/       login page, login/logout Server Actions, Zod schema
-│   └── membership/           packages, member registration, PDF card, Data Member (day 2)
+│   └── membership/           packages, registration, PDF card, Data Member, check-in, visits, renewal, PT (days 2–3)
 ├── components/
 │   ├── app-sidebar.tsx       The logged-in sidebar (menu per role, user box, logout)
 │   ├── placeholder-page.tsx  "Halaman ini belum tersedia" page used by every unbuilt menu
@@ -100,11 +100,11 @@ master-gym/
 | `/` | `app/page.tsx` | anyone | Redirects to `/dashboard` (which redirects to `/login` if logged out) |
 | `/login` | `app/login/page.tsx` → `features/authentication/login-page.tsx` | logged out | Email + password form |
 | `/dashboard` | `app/(app)/dashboard/page.tsx` | both | Placeholder titled "Dashboard" (kasir) or "Home" (superadmin) |
-| `/membership/check-in` | `app/(app)/membership/check-in/page.tsx` | kasir | Placeholder "Absen" |
-| `/membership/attendance` | `.../membership/attendance/page.tsx` | kasir | Placeholder "Riwayat Absen" |
-| `/membership/members` | `.../membership/members/page.tsx` | kasir | Data Member: member list with search, status filter, Edit and PDF buttons |
-| `/membership/payment` | `.../membership/payment/page.tsx` | kasir | Pembayaran: form picker (only "Daftar Member Baru" so far) |
-| `/membership/pricing` | `.../membership/pricing/page.tsx` | superadmin | Pengaturan Harga: monthly base price per category, Kelola Paket pop-up |
+| `/membership/check-in` | `app/(app)/membership/check-in/page.tsx` | kasir | Absen: scan/phone input, member pop-up (locker, PT + trainer), today's attendance |
+| `/membership/attendance` | `.../membership/attendance/page.tsx` | kasir | Riwayat Absen: members and visitors for one date (`?date=YYYY-MM-DD`) |
+| `/membership/members` | `.../membership/members/page.tsx` | kasir | Data Member: search, status filter incl. Visitor, Total Kehadiran, Detail, Edit and PDF buttons |
+| `/membership/payment` | `.../membership/payment/page.tsx` | kasir | Pembayaran: form picker driven by `?form=new\|visit\|renew\|addon&member=<id>` (Daftar Member Baru, Visit, Perpanjang, Add-On PT) |
+| `/membership/pricing` | `.../membership/pricing/page.tsx` | superadmin | Pengaturan Harga: monthly base price per category, Harga Visit, Kelola Paket, Kelola Trainer, Kelola Program PT |
 | `/api/uploads/...` | `app/api/uploads/[...path]/route.ts` | kasir | Member photo files (`requireRole`, so not-logged-in or superadmin is redirected; `proxy.ts` skips `/api`) |
 | `/inventory` | `app/(app)/inventory/page.tsx` | kasir | Placeholder "Inventori" |
 | `/sales/new` | `app/(app)/sales/new/page.tsx` | kasir | Placeholder "Tambah Penjualan" |
@@ -212,18 +212,24 @@ Future feature actions follow the same steps, in Sembako's order: `requireRole(.
 
 | File | What it does |
 |---|---|
-| `logic.ts` | Pure functions (tested): `todayWib`, `membershipEndDate`, `daysRemaining`, `membershipStatus` (active / expiring ≤ 7 days / expired), `normalizePhone`, `membershipPrice` (base × months), `paymentsMatchPrice`, `formatMemberNo`. |
-| `validation.ts` | Zod schemas (`PackageSchema`, `CategoryPricesSchema`, `RegisterMemberSchema`, `UpdateMemberSchema`), labels, shared types (`MemberCard`, `ActionResult`). Indonesian messages. |
-| `queries.ts` | Server-only reads: `listActivePackages()`, `getCategoryPrices()`, `listMembers()` (members joined with their latest membership, status computed). |
-| `actions.ts` | `"use server"`. Superadmin only: `saveCategoryPricesAction`, package create/update/delete. Kasir only: `registerMemberAction` (recomputes the price on the server; one transaction: member number from `member_no_seq`, photo saved, member + membership + payments), `updateMemberAction`. |
-| `payment-page.tsx` | The Pembayaran page: form dropdown, hosts the registration wizard. |
-| `pricing-page.tsx` | Pengaturan Harga (superadmin): base price form + "Kelola Paket" button. |
+| `logic.ts` | Pure functions (tested): `todayWib`, `wibDayRange`, `renewalStartDate`, `membershipEndDate`, `daysRemaining`, `membershipStatus` (active / expiring ≤ 7 days / expired), `normalizePhone`, `membershipPrice` (base × months), `paymentsMatchPrice`, `formatMemberNo`. |
+| `validation.ts` | Zod schemas (`PackageSchema`, `CategoryPricesSchema`, `RegisterMemberSchema`, `UpdateMemberSchema`, `CheckInSchema`, `VisitSchema`, `RenewMemberSchema`, `PtPurchaseSchema`, `TrainerSchema`, `PtProgramSchema`, `VisitPriceSchema`), labels, shared types (`MemberCard`, `MemberSummary`, `AttendanceRow`, `ActionResult`). Indonesian messages. |
+| `queries.ts` | Server-only reads: `listActivePackages()`, `getCategoryPrices()`, `listMembers()` (members joined with their latest membership, status computed, `totalCheckIns`), `getVisitPrice`, `listActiveTrainers`, `listActivePtPrograms`, `getMemberSummary`, `findMemberSummary` (token or phone), `searchMembers`, `listAttendance(date)`, `listVisitors`, `getMemberDetail`. |
+| `actions.ts` | `"use server"`. Superadmin only: `saveCategoryPricesAction`, package create/update/delete. Superadmin also: `saveVisitPriceAction`, trainer and PT program create/update/delete. Kasir only: `registerMemberAction` (recomputes the price on the server; one transaction: member number from `member_no_seq`, photo saved, member + membership + payments), `updateMemberAction`, `lookupMemberAction`, `checkInAction` (refuses expired members and PT without balance), `createVisitAction` (visit + payments = visitor check-in), `searchMembersAction`, `renewMemberAction`, `buyPtAction`, `memberDetailAction`. |
+| `payment-page.tsx` | The Pembayaran page: form dropdown driven by `?form=`, hosts the four forms. |
+| `pricing-page.tsx` | Pengaturan Harga (superadmin): base price form, Harga Visit form, Kelola Paket / Trainer / Program PT buttons. |
 | `register-member-wizard.tsx` | Daftar Member Baru: details → photo → package and price → payment → "Cek Lagi" review; downloads the PDF after saving. |
 | `payment-rows.tsx` | Split-payment rows (method + amount). Day 3/4 forms reuse it. |
 | `kelola-paket-dialog.tsx` | Pop-up to add, edit and delete packages (name + months). |
 | `webcam-capture.tsx` | `getUserMedia` preview + capture to a JPEG data URL. |
 | `member-pdf.ts` | `downloadMemberPdf(card)`: builds the 90×160 mm PDF with `jspdf` + `qrcode`. |
-| `members-page.tsx`, `edit-member-dialog.tsx` | Data Member table (search, filter) and the Edit pop-up (including photo retake). |
+| `members-page.tsx`, `edit-member-dialog.tsx` | Data Member table (search, filter incl. Visitor, Total Kehadiran, Detail) and the Edit pop-up (including photo retake). |
+| `check-in-page.tsx` | Absen: scan input that keeps focus, member pop-up, today's list. |
+| `attendance-table.tsx`, `attendance-page.tsx` | Attendance table (used by Absen and Riwayat Absen) and Riwayat Absen with the date filter. |
+| `member-search.tsx` | Search/scan → pick a member (used by Perpanjang and Add-On). |
+| `visit-form.tsx`, `renew-member-form.tsx`, `pt-addon-form.tsx` | The three Pembayaran forms added on day 3. |
+| `kelola-trainer-dialog.tsx`, `kelola-program-pt-dialog.tsx` | Superadmin CRUD pop-ups, same pattern as Kelola Paket. |
+| `member-detail-dialog.tsx` | Detail pop-up: PT balance + check-in history. |
 | `*.test.ts` | Vitest unit tests for `logic.ts` and `validation.ts`. |
 
 ### `components/`
@@ -247,12 +253,12 @@ Future feature actions follow the same steps, in Sembako's order: `requireRole(.
 |---|---|
 | `lib/auth/session.ts` | Server-only. `encrypt` / `decrypt` the JWT, `createSession`, `getSession`, `deleteSession`. Exports the `Role` and `SessionPayload` types. Crashes at startup if `SESSION_SECRET` is missing or shorter than 32 characters. See [AUTH.md](./AUTH.md). |
 | `lib/auth/dal.ts` | Server-only "data access layer" for auth. `verifySession()` (cached per request) and `requireRole(...roles)`. |
-| `lib/db/schema.ts` | Enums, the `users`, `packages`, `members`, `memberships` and `payments` tables, and `member_no_seq`. See [DATABASE.md](./DATABASE.md). |
+| `lib/db/schema.ts` | Enums, the `users`, `packages`, `members`, `memberships`, `payments` and the day 3 tables (`visit_price`, `trainers`, `pt_programs`, `pt_purchases`, `visits`, `check_ins`), and `member_no_seq`. See [DATABASE.md](./DATABASE.md). |
 | `lib/db/index.ts` | Server-only. Creates one `pg` connection pool and exports `db` (Drizzle). If `DATABASE_URL` contains `sslmode=require`, it strips that and connects with SSL that accepts self-signed certificates (needed by some hosted databases). |
 | `lib/db/seed.ts` | CLI (`npm run db:seed`). Creates `superadmin@mastergym.test` and `kasir@mastergym.test`, both with password `password123`. Running it twice fails on the duplicate email and changes nothing. **Dev only.** |
 | `lib/db/create-user.ts` | CLI (`npm run db:create-user -- --name=… --email=… --password=… --role=kasir|superadmin`). Validates the role against the enum, hashes the password, inserts the user. Use this on a real server instead of the seed. |
 | `lib/nav.ts` | The sidebar menu: `kasirSections` and `superadminSections`, each a list of `{ label, entries: [{ label, href, icon }] }`. `navForRole(role)` picks one. **To add a menu item, edit this file.** The page itself must still call `requireRole`; hiding a link is not security. |
-| `lib/format.ts` | `rupiah` (`Intl.NumberFormat`, "Rp150.000") and `formatDateId(date)`. |
+| `lib/format.ts` | `rupiah` (`Intl.NumberFormat`, "Rp150.000"), `formatDateId(date)` and `formatTimeWib(date)` (HH.mm, Asia/Jakarta). |
 | `lib/uploads.ts` | `UPLOADS_DIR`, `saveBase64Upload` (validates type and size ≤ 2 MB, writes a random filename), `readUpload` (rejects paths outside the folder). |
 | `lib/utils.ts` | `cn(...classes)`: joins class names and resolves Tailwind conflicts (`clsx` + `tailwind-merge`). Used everywhere. |
 

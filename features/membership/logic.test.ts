@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   daysRemaining, formatMemberNo, membershipEndDate, membershipStatus,
-  membershipPrice, normalizePhone, paymentsMatchPrice, todayWib,
+  membershipPrice, normalizePhone, paymentsMatchPrice, renewalStartDate, todayWib, wibDayRange,
 } from "./logic";
 
 describe("todayWib", () => {
@@ -80,4 +80,32 @@ describe("formatMemberNo", () => {
     "%i → %s",
     (n, out) => expect(formatMemberNo(n)).toBe(out),
   );
+});
+
+describe("renewalStartDate", () => {
+  it.each([
+    ["2026-11-27", "2026-10-29", "2026-11-28"], // still active: day after end
+    ["2026-10-29", "2026-10-29", "2026-10-30"], // ends today
+    ["2026-10-28", "2026-10-29", "2026-10-29"], // ended yesterday: today
+    ["2026-08-01", "2026-10-29", "2026-10-29"], // long expired: today
+    ["2026-12-31", "2026-10-29", "2027-01-01"], // year rollover
+    [null, "2026-10-29", "2026-10-29"],
+  ])("end %s, today %s → %s", (end, today, start) => {
+    expect(renewalStartDate(end, today)).toBe(start);
+  });
+});
+
+describe("wibDayRange", () => {
+  it("is WIB midnight to WIB midnight in UTC", () => {
+    const r = wibDayRange("2026-10-29");
+    expect(r.start.toISOString()).toBe("2026-10-28T17:00:00.000Z");
+    expect(r.end.toISOString()).toBe("2026-10-29T17:00:00.000Z");
+  });
+  it("puts 23:30 and 00:10 WIB on the right days", () => {
+    const r = wibDayRange("2026-10-29");
+    const late = new Date("2026-10-29T16:30:00Z"); // 23:30 WIB on the 29th
+    const early = new Date("2026-10-29T17:10:00Z"); // 00:10 WIB on the 30th
+    expect(late >= r.start && late < r.end).toBe(true);
+    expect(early >= r.start && early < r.end).toBe(false);
+  });
 });

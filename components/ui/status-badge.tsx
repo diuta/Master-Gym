@@ -1,4 +1,4 @@
-import { AlertTriangle, CheckCircle2, CircleOff, XCircle } from "lucide-react"
+import { AlertTriangle, CheckCircle2, CircleOff, UserCheck, UserRound, XCircle } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { cn } from "@/lib/utils"
 
@@ -13,6 +13,8 @@ export type StatusKind =
   | "member_active"
   | "member_expiring"
   | "member_expired"
+  | "member"
+  | "visitor"
 
 const statusConfig: Record<
   StatusKind,
@@ -67,6 +69,16 @@ const statusConfig: Record<
     label: "Sudah Habis",
     icon: XCircle,
     className: "bg-destructive/10 text-destructive border-destructive/30",
+  },
+  member: {
+    label: "Member",
+    icon: UserCheck,
+    className: "bg-success/10 text-success border-success/30",
+  },
+  visitor: {
+    label: "Visitor",
+    icon: UserRound,
+    className: "bg-primary/10 text-primary border-primary/30",
   },
 }
 

@@ -16,6 +16,8 @@ const connectionString = process.env.DATABASE_URL.replace(
 const pool = new Pool({
   connectionString,
   ssl: needsSsl ? { rejectUnauthorized: false } : undefined,
+  // timestamp-without-tz columns use now() and are read as UTC, so don't depend on the server's zone.
+  options: "-c timezone=UTC",
 });
 
 export const db = drizzle(pool, { schema });
