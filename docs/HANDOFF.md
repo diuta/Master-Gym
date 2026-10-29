@@ -1,6 +1,6 @@
 # Master Gym — Handoff Context
 
-Last updated: 2026-10-29. Read this first when continuing on another PC or in a new AI session.
+Last updated: 2026-10-30. Read this first when continuing on another PC or in a new AI session.
 
 ## 1. What this project is
 
@@ -85,11 +85,21 @@ A one-page **PDF** with QR code, name, member ID, phone, expiry date and photo. 
 | Trainer | Chosen **at check-in** when "Pakai PT" is ticked, not at purchase |
 | PT sessions | At check-in, a checkbox "use PT this session" takes one session off the member's remaining PT sessions. Sessions never expire. A "per visit" program = 1 session. The balance is computed (purchased − check-ins with a trainer), not stored |
 | Visit, PT prices, trainers | Visit price, PT program prices and trainers are managed by the **superadmin** (Pengaturan Harga); the kasir never types a price |
+| Units | One unit per product (no box/piece conversion) |
+| Invoice/receipt | None for sales and purchases, record only. Numbers `PJ-0001` / `PB-0001` are generated |
+| Cancel sale/purchase | **Superadmin only**, from the Detail pop-up (Batalkan + confirm). Rows are kept, status becomes Dibatalkan, stock is restored by reversing rows. The kasir sees the same history without the button |
+| Expense categories | Required; the superadmin manages them (Kelola Kategori on Pengeluaran). Only the superadmin deletes an expense. One payment method per expense, no split |
+| Products and prices | The **kasir** adds/edits products and sets the sale price. The sale price is read-only at checkout and recomputed on the server |
+| Sale with too little stock | Blocked ("Stok tidak cukup") |
+| Supplier | Picked from a list; the **kasir** manages it (Kelola Supplier on Tambah Pembelian). No ongkir, pajak or receipt photo |
+| Stock correction, product barcode | Not now; products are picked by name |
+| Dates on sale/purchase/expense | Editable, default today WIB, no future dates |
+| Initial stock | Can be entered when adding a product (writes an `initial` movement), so existing stock loads at launch |
 | Expired members | Blocked from check-in: the pop-up shows "Expired", Check-In is disabled (also refused on the server), and **Perpanjang** opens the renewal form with that member selected |
 
-## 5. Current state (end of day 3)
+## 5. Current state (end of day 4)
 
-Days 2 and 3 are built and verified. Day 3 (check-in, visit, renewal, PT) was run in a browser as kasir and superadmin with a simulated scanner (typing the token + Enter). The dev DB was wiped and reseeded on 2026-10-28 because it predated day 1; day 3 added tables with `npm run db:push`.
+Days 2, 3 and 4 are built and verified. Day 3 (check-in, visit, renewal, PT) was run in a browser as kasir and superadmin with a simulated scanner (typing the token + Enter). Day 4 (shop) was run in a browser as kasir and superadmin. The dev DB was wiped and reseeded on 2026-10-28 because it predated day 1; days 3 and 4 added tables with `npm run db:push`.
 
 **Done**
 - Day 1 (foundation): roles, `requireRole()`, sidebar menus per role, 13 pages, dark navy/orange theme, seed accounts `superadmin@mastergym.test` / `kasir@mastergym.test` (password `password123`, dev only).
@@ -100,12 +110,27 @@ Days 2 and 3 are built and verified. Day 3 (check-in, visit, renewal, PT) was ru
 - **Pengaturan Harga** (superadmin): Harga Visit, Kelola Trainer, Kelola Program PT.
 - **Data Member:** Total Kehadiran column, Detail dialog (PT balance + check-in history), Visitor filter.
 - 6 new tables and `payments` links, see [DATABASE.md](./DATABASE.md).
+- Day 4 (shop), code in `features/shop/`, `features/expenses/`, `lib/period.ts`:
+  - **Inventori** (kasir): summary, product table with stock status, Kelola Kategori, 3-step Tambah Produk (optional initial stock), Edit, delete (deactivates if used).
+  - **Tambah Penjualan** / **Tambah Pembelian** (kasir): 4-step wizards with split payments; purchases use Kelola Supplier and a typed unit cost (moving-average cost).
+  - **Riwayat Penjualan** / **Riwayat Pembelian** (kasir + superadmin): period filter (sales also by product), Detail pop-up; only the superadmin can Batalkan.
+  - **Pengeluaran** (kasir adds; superadmin sees the history, deletes, and manages categories).
+  - Stock is the sum of `stock_movements`, never stored; 10 new tables, see [DATABASE.md](./DATABASE.md).
 
 **Not done / known gaps**
-- Test with the real USB scanner and the real webcam on the front-desk PC.
+- The real USB scanner was tested by the user on 2026-10-30 and works. The real webcam is still untested on the front-desk PC.
 - The webcam needs HTTPS if the app is opened over the LAN (`localhost` is fine).
 - No cancel/refund for visits, renewals or PT purchases.
 - Riwayat Absen shows one date at a time.
+- **Day 4 gaps:**
+  - No stock correction (stok opname).
+  - No invoice print or PDF.
+  - Purchase-cancel average-cost reversal is best-effort: exact only when no other stock change happened since that purchase. If the cancel empties stock, the average is kept (not reset to 0).
+  - No pagination on the sales/purchase/expense histories or Inventori.
+  - Esc does not close the Kelola pop-ups (Kelola Paket, Trainer, Program PT, Kategori, Supplier) while an input is focused. Use the X button. Likely a browser-automation artifact; re-test with a physical keyboard.
+  - `drizzle-kit push` doesn't update a changed CHECK whose name stays the same: rename the check when you change it (that's why payments' check is `payments_exactly_one_link`).
+  - Invoice numbers can skip after a failed save (the sequence isn't rolled back).
+  - Cancelling a sale of a since-deactivated product restores its stock to the hidden product.
 - Impossible dates such as `2026-02-31` in the URL roll over to the next month.
 - No pagination in Data Member, Visitor list or attendance (shortcut; add it if lists get long).
 - Orphan photo files are kept when a member's photo is replaced (shortcut).
@@ -165,7 +190,7 @@ Pages: `/membership/check-in`, `/membership/attendance`, and the remaining forms
 
 **Day 3 is done when:** scanning a member's PDF QR with the real scanner opens their pop-up and checks them in; the phone-number fallback works; visits, renewals and PT add-ons save with split payments; Riwayat Absen shows members and visitors.
 
-## 9. Day 4: shop (inventory, sales, purchases, expenses)
+## 9. Day 4: shop (inventory, sales, purchases, expenses) (done, kept for reference)
 
 Pages: `/inventory`, `/sales/new`, `/sales/history`, `/purchases/new`, `/purchases/history`, `/expenses`. Detail in section 3 (Kasir → items 3–8).
 

@@ -101,11 +101,13 @@ One row per purchase/renewal period.
 | `membership_id` | FK `memberships.id`, nullable | Link to a registration/renewal |
 | `visit_id` | FK `visits.id`, nullable | Link to a visit (day 3) |
 | `pt_purchase_id` | FK `pt_purchases.id`, nullable | Link to a PT purchase (day 3) |
+| `sale_id` | FK `sales.id`, nullable | Link to a sale (day 4): money in |
+| `purchase_id` | FK `purchases.id`, nullable | Link to a stock purchase (day 4): money out |
 | `method` | `payment_method` not null | |
 | `amount` | `decimal(14,2)` not null | Rows of one purchase sum to its price |
 | `paid_at` | `timestamp` not null, default now | |
 
-Check `payments_one_link`: `num_nonnulls(membership_id, visit_id, pt_purchase_id) = 1`, so every payment row belongs to exactly one purchase. Later days add more link columns (sales, purchases) and must extend this check.
+Check `payments_exactly_one_link`: `num_nonnulls(membership_id, visit_id, pt_purchase_id, sale_id, purchase_id) = 1`, so every payment row belongs to exactly one document. Renamed from `payments_one_link` because drizzle-kit push does not update a check whose name is unchanged.
 
 ### Day 3 tables
 
@@ -120,7 +122,30 @@ Check `payments_one_link`: `num_nonnulls(membership_id, visit_id, pt_purchase_id
 
 **PT balance is computed, not stored:** sum of `pt_purchases.sessions` for the member minus the count of that member's `check_ins` with `trainer_id` not null. PT sessions never expire. Check-in locks the member row so the balance can't go below zero.
 
-Planned (not built yet): the inventory/sales/purchases/expenses tables copied from Sembako.
+### Day 4 tables (shop)
+
+Enums `stock_movement_type` (`initial`, `purchase`, `sale`, `purchase_cancel`, `sale_cancel`) and `transaction_status` (`success`, `cancelled`); sequences `sale_no_seq` and `purchase_no_seq` (invoice `PJ-0001` / `PB-0001`, formatted in code).
+
+| Table | Columns | Notes |
+|---|---|---|
+| `product_categories` | `id`, `name` unique, `is_active`, timestamps | Managed by the kasir (Kelola Kategori) |
+| `products` | `id`, `name`, `category_id` FK, `unit`, `sale_price`, `min_stock` (default 5), `avg_cost` decimal(14,4), `is_active`, timestamps | One unit per product. **There is no stock column** |
+| `suppliers` | `id`, `name` unique, `phone` nullable, `is_active`, timestamps | Managed by the kasir (Kelola Supplier) |
+| `stock_movements` | `id`, `product_id` FK, `qty_delta` int, `type`, `sale_item_id` / `purchase_item_id` nullable FKs, `created_at` | The stock ledger, see below |
+| `sales` | `id`, `invoice_no` unique, `buyer_name` nullable, `date`, `notes`, `total`, `status`, `cancelled_at`, timestamps | |
+| `sale_items` | `id`, `sale_id` FK, `product_id` FK, `product_name`, `unit`, `qty`, `unit_price`, `unit_cost`, `line_total` | Name, unit, price and avg cost are **copied** at sale time (`unit_cost` feeds day 5 profit) |
+| `purchases` | `id`, `invoice_no` unique, `supplier_id` FK, `supplier_name`, `date`, `notes`, `total`, `status`, `cancelled_at`, timestamps | |
+| `purchase_items` | `id`, `purchase_id` FK, `product_id` FK, `product_name`, `unit`, `qty`, `unit_cost`, `line_total` | `unit_cost` is typed by the kasir |
+| `expense_categories` | `id`, `name` unique, `is_active`, timestamps | Managed by the superadmin; seeded with Listrik, Air, Gaji, Perawatan Alat, Kebersihan, Lainnya |
+| `expenses` | `id`, `date`, `category_id` FK, `category_name`, `description`, `amount`, `method`, `created_at` | One method, no split, no payments rows |
+
+**Ledger rule:** stock = `SUM(stock_movements.qty_delta)` per product. It is never stored anywhere else, and `stock_movements` is **insert-only**. Every stock change happens inside one transaction in `features/shop/actions.ts`: lock the product row with `lockProducts` (`SELECT … FOR UPDATE`, in `features/shop/stock.ts`, which also has the `stockSubquery` ledger sum), check, then insert the movement rows. A sale is blocked if stock < qty. Cancelling a sale or purchase sets `status = cancelled` and inserts reversing rows (`sale_cancel`, `purchase_cancel`); the original rows and their payments are kept. Cancelling a purchase is blocked when the product's current stock is less than the quantity bought.
+
+**`avg_cost` (moving average):** on a purchase, new avg = (old stock × old avg + qty × unit cost) ÷ (old stock + qty); if old stock ≤ 0, avg = unit cost. A sale copies the current avg into `sale_items.unit_cost` and leaves it unchanged; so does cancelling a sale. Cancelling a purchase reverses the average best-effort (exact only when no other stock change happened since); if the cancel empties stock, the average is kept (not reset to 0).
+
+**Which date reports use (plan for day 5 reports, not built yet):** each document's own date, not when it was saved. Sales, purchases and expenses use their `date` column (editable, no future dates); membership, visit and PT income use `payments.paid_at` converted to WIB. Rows with `status = cancelled` are excluded. Payments are money in when `sale_id` / `membership_id` / `visit_id` / `pt_purchase_id` is set and money out when `purchase_id` is set. Expenses have no `payments` rows: money out is purchases (via `payments.purchase_id`) plus the `expenses` table.
+
+**Deactivate, not delete:** deleting a product, product category, supplier or expense category that is referenced only sets `is_active = false`; unused ones are really deleted. A product with stock > 0 can't be deleted. Creating a name that matches an inactive row reactivates that row. Old documents keep the copied names.
 
 ## 3. Connecting
 
