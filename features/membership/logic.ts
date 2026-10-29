@@ -54,3 +54,16 @@ export function paymentsMatchPrice(payments: { amount: number }[], price: number
 export function formatMemberNo(n: number): string {
   return `MG-${String(n).padStart(4, "0")}`;
 }
+
+// Renewal extends from the day after the current end, but never starts in the past.
+export function renewalStartDate(latestEndDate: string | null, today: string): string {
+  if (!latestEndDate) return today;
+  const next = fmt(Date.UTC(...parse(latestEndDate)) + DAY_MS);
+  return next > today ? next : today;
+}
+
+// WIB has no DST (UTC+7), so a fixed offset is exact. `end` is exclusive.
+export function wibDayRange(date: string): { start: Date; end: Date } {
+  const start = Date.UTC(...parse(date)) - 7 * 3_600_000;
+  return { start: new Date(start), end: new Date(start + DAY_MS) };
+}
