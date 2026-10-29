@@ -30,8 +30,12 @@ services:
       DATABASE_URL: "postgres://mastergym:mastergym@postgres:5432/mastergym"
       SESSION_SECRET: ${SESSION_SECRET}
       NEXT_SERVER_ACTIONS_ENCRYPTION_KEY: ${NEXT_SERVER_ACTIONS_ENCRYPTION_KEY}
+      UPLOADS_DIR: /app/uploads
     ports:
       - "${APP_HOST_PORT}:3000"
+    volumes:
+      - uploads_data:/app/uploads
 
 volumes:
   postgres_data:
+  uploads_data:

@@ -9,7 +9,7 @@ There are two roles, defined once in `lib/db/schema.ts` as the Postgres enum `ro
 | Role | Who | Can open |
 |---|---|---|
 | `kasir` | The front-desk cashier. **One shared account.** | Dashboard, Membership (Absen, Riwayat Absen, Data Member, Pembayaran), Inventori, Penjualan, Pembelian, Pengeluaran |
-| `superadmin` | The owner/manager. One account. | Home, Laporan, Pengaturan Akun |
+| `superadmin` | The owner/manager. One account. | Home, Laporan, Pengaturan Harga, Pengaturan Akun |
 
 The roles don't overlap: the superadmin does **not** get the cashier's daily-operation pages (the spec says the admin doesn't check members in), and the cashier can't see reports. Both share `/dashboard`, which will show different content per role.
 

@@ -2,7 +2,7 @@
 
 [Back to README](../README.md) · Related docs: [AUTH](./AUTH.md) · [DATABASE](./DATABASE.md) · [UI](./UI.md) · [DOCKER](./DOCKER.md) · [HANDOFF](./HANDOFF.md)
 
-This document explains **what every part of the code does, where it lives, and how a request flows through it**. It describes the code as of the end of day 1 (2026-10-28): login, roles, layout and empty placeholder pages. Update it when a feature lands.
+This document explains **what every part of the code does, where it lives, and how a request flows through it**. It describes the code as of the end of day 2 (2026-10-28): login, roles, layout, member registration (packages, wizard, PDF card, Data Member) and placeholder pages for the rest. Update it when a feature lands.
 
 ---
 
@@ -20,12 +20,14 @@ This document explains **what every part of the code does, where it lives, and h
 | **shadcn/ui** (`base-nova` style) on **Base UI** | — | The UI kit. Component source lives in `components/ui/` and is ours to edit |
 | **lucide-react** | 1.45 | Icons |
 | **Zod** | 4 | Validating form input on the server |
+| **Vitest** | 4.1 | Unit tests (`npm test`) for the membership logic and validation |
+| **jspdf** + **qrcode** | — | The member PDF card (QR image + PDF), built in the browser |
 | **jose** | 6 | Signing and verifying the session cookie (JWT, HS256) |
 | **bcryptjs** | 3 | Hashing and checking passwords |
 | **tsx** | 4 | Running the CLI scripts in `lib/db/` (`db:seed`, `db:create-user`) |
 | **Docker** + compose | — | Running app + Postgres as containers (see [DOCKER.md](./DOCKER.md)) |
 
-Not used on purpose: no REST API layer, no state library, no test runner yet, no `next-themes` (the app is dark only).
+Not used on purpose: no REST API layer, no state library, no `next-themes` (the app is dark only).
 
 > **Next.js 16 note.** `AGENTS.md` warns that this Next.js version differs from older ones. The most visible difference here is that the middleware file is called **`proxy.ts`**, with an exported function `proxy`, instead of `middleware.ts`.
 
@@ -40,6 +42,7 @@ master-gym/
 │   ├── globals.css           Tailwind + the colour theme (CSS variables)
 │   ├── page.tsx              "/"  → redirects to /dashboard
 │   ├── favicon.ico
+│   ├── api/uploads/[...path]/ Serves member photos (kasir only)
 │   ├── login/page.tsx        "/login" → re-exports features/authentication/login-page
 │   └── (app)/                Route group for logged-in pages (the "(app)" part is NOT in the URL)
 │       ├── layout.tsx        Checks the session, loads the user, renders sidebar + header
@@ -52,7 +55,8 @@ master-gym/
 │       ├── reports/          (superadmin)
 │       └── administration/account-settings/   (superadmin)
 ├── features/                 Business code, grouped by domain
-│   └── authentication/       login page, login/logout Server Actions, Zod schema
+│   ├── authentication/       login page, login/logout Server Actions, Zod schema
+│   └── membership/           packages, member registration, PDF card, Data Member (day 2)
 ├── components/
 │   ├── app-sidebar.tsx       The logged-in sidebar (menu per role, user box, logout)
 │   ├── placeholder-page.tsx  "Halaman ini belum tersedia" page used by every unbuilt menu
@@ -65,12 +69,15 @@ master-gym/
 │   ├── auth/dal.ts           verifySession() and requireRole() guards
 │   ├── db/schema.ts          Every table and enum (the single source of truth for the DB)
 │   ├── db/index.ts           The shared DB connection (`db`) for the app
+│   ├── format.ts             rupiah and formatDateId helpers
+│   ├── uploads.ts            Save/read member photos on disk (UPLOADS_DIR)
 │   ├── db/seed.ts            CLI: creates the two dev accounts
 │   ├── db/create-user.ts     CLI: creates one account with a hashed password
 │   ├── nav.ts                Sidebar menu definition per role
 │   └── utils.ts              cn() — merges Tailwind class names
 ├── proxy.ts                  Runs before every page: redirects to /login if not logged in
 ├── docs/                     This documentation
+├── vitest.config.mts         Test runner config (`@` alias, node environment)
 ├── Dockerfile, docker-compose.yml, docker-compose.prod.yml, .dockerignore
 ├── drizzle.config.ts         Tells drizzle-kit where the schema is and which DB to use
 ├── next.config.ts            `output: "standalone"` (needed by the Docker image)
@@ -95,8 +102,10 @@ master-gym/
 | `/dashboard` | `app/(app)/dashboard/page.tsx` | both | Placeholder titled "Dashboard" (kasir) or "Home" (superadmin) |
 | `/membership/check-in` | `app/(app)/membership/check-in/page.tsx` | kasir | Placeholder "Absen" |
 | `/membership/attendance` | `.../membership/attendance/page.tsx` | kasir | Placeholder "Riwayat Absen" |
-| `/membership/members` | `.../membership/members/page.tsx` | kasir | Placeholder "Data Member" |
-| `/membership/payment` | `.../membership/payment/page.tsx` | kasir | Placeholder "Pembayaran" |
+| `/membership/members` | `.../membership/members/page.tsx` | kasir | Data Member: member list with search, status filter, Edit and PDF buttons |
+| `/membership/payment` | `.../membership/payment/page.tsx` | kasir | Pembayaran: form picker (only "Daftar Member Baru" so far) |
+| `/membership/pricing` | `.../membership/pricing/page.tsx` | superadmin | Pengaturan Harga: monthly base price per category, Kelola Paket pop-up |
+| `/api/uploads/...` | `app/api/uploads/[...path]/route.ts` | kasir | Member photo files (`requireRole`, so not-logged-in or superadmin is redirected; `proxy.ts` skips `/api`) |
 | `/inventory` | `app/(app)/inventory/page.tsx` | kasir | Placeholder "Inventori" |
 | `/sales/new` | `app/(app)/sales/new/page.tsx` | kasir | Placeholder "Tambah Penjualan" |
 | `/sales/history` | `app/(app)/sales/history/page.tsx` | kasir | Placeholder "Riwayat Penjualan" |
@@ -188,7 +197,8 @@ Future feature actions follow the same steps, in Sembako's order: `requireRole(.
 | `app/page.tsx` | `redirect("/dashboard")`. |
 | `app/login/page.tsx` | One line: re-exports the login page from `features/authentication`. |
 | `app/(app)/layout.tsx` | The logged-in shell: session check, user lookup, sidebar, header bar (sidebar toggle + "Master Gym"), and `<main>` with padding. |
-| `app/(app)/**/page.tsx` | The 13 pages listed in section 3. |
+| `app/(app)/**/page.tsx` | The 13 pages listed in section 3. Members and payment fetch data and render `features/membership/*`; the rest are placeholders. |
+| `app/api/uploads/[...path]/route.ts` | `GET`: `requireRole("kasir")`, then `readUpload()`; content type from the file extension, `private` cache for a day; 404 for an unknown extension, a missing file or a path outside `UPLOADS_DIR`. |
 
 ### `features/authentication/`
 
@@ -197,6 +207,24 @@ Future feature actions follow the same steps, in Sembako's order: `requireRole(.
 | `login-page.tsx` | Client component. A shadcn `Card` with email and password fields. `useActionState(loginAction)` gives `state` (field errors or a message), the bound `action`, and `pending` (button shows "Memproses..."). Errors appear under each field or in a red `Alert`. |
 | `actions.ts` | `"use server"`. **`loginAction`**: validates with `LoginSchema`; looks up the user by email; if not found, still runs `bcrypt.compare` against a dummy hash so the response time doesn't reveal which emails exist; compares the password; on success calls `createSession({ id, role })` and redirects to `/dashboard`. Always answers "Email atau password salah." for both wrong email and wrong password. **`logoutAction`**: deletes the cookie, redirects to `/login`. Details in [AUTH.md](./AUTH.md). |
 | `validation.ts` | `LoginSchema` (email must be valid, password not empty, Indonesian messages) and the `LoginState` type returned to the form. |
+
+### `features/membership/`
+
+| File | What it does |
+|---|---|
+| `logic.ts` | Pure functions (tested): `todayWib`, `membershipEndDate`, `daysRemaining`, `membershipStatus` (active / expiring ≤ 7 days / expired), `normalizePhone`, `membershipPrice` (base × months), `paymentsMatchPrice`, `formatMemberNo`. |
+| `validation.ts` | Zod schemas (`PackageSchema`, `CategoryPricesSchema`, `RegisterMemberSchema`, `UpdateMemberSchema`), labels, shared types (`MemberCard`, `ActionResult`). Indonesian messages. |
+| `queries.ts` | Server-only reads: `listActivePackages()`, `getCategoryPrices()`, `listMembers()` (members joined with their latest membership, status computed). |
+| `actions.ts` | `"use server"`. Superadmin only: `saveCategoryPricesAction`, package create/update/delete. Kasir only: `registerMemberAction` (recomputes the price on the server; one transaction: member number from `member_no_seq`, photo saved, member + membership + payments), `updateMemberAction`. |
+| `payment-page.tsx` | The Pembayaran page: form dropdown, hosts the registration wizard. |
+| `pricing-page.tsx` | Pengaturan Harga (superadmin): base price form + "Kelola Paket" button. |
+| `register-member-wizard.tsx` | Daftar Member Baru: details → photo → package and price → payment → "Cek Lagi" review; downloads the PDF after saving. |
+| `payment-rows.tsx` | Split-payment rows (method + amount). Day 3/4 forms reuse it. |
+| `kelola-paket-dialog.tsx` | Pop-up to add, edit and delete packages (name + months). |
+| `webcam-capture.tsx` | `getUserMedia` preview + capture to a JPEG data URL. |
+| `member-pdf.ts` | `downloadMemberPdf(card)`: builds the 90×160 mm PDF with `jspdf` + `qrcode`. |
+| `members-page.tsx`, `edit-member-dialog.tsx` | Data Member table (search, filter) and the Edit pop-up (including photo retake). |
+| `*.test.ts` | Vitest unit tests for `logic.ts` and `validation.ts`. |
 
 ### `components/`
 
@@ -211,7 +239,7 @@ Future feature actions follow the same steps, in Sembako's order: `requireRole(.
 | File | What it does |
 |---|---|
 | `use-mobile.ts` | `useIsMobile()` returns `true` when the window is narrower than 768px. Built on React's `useSyncExternalStore`: the server and the first browser render both say `false`, then React switches to the real value. This avoids the hydration-mismatch error the original version had (Sembako still has that bug). Used by `components/ui/sidebar.tsx`. |
-| `use-sort.ts` | `useSort(rows, getValue)` → `{ sortedRows, sort, toggleSort }`. Clicking a column cycles ascending → descending → off. Numbers compare as numbers, everything else with Indonesian locale ordering. Pairs with `components/ui/sortable-th.tsx`. Not used yet; it's for the upcoming tables. |
+| `use-sort.ts` | `useSort(rows, getValue)` → `{ sortedRows, sort, toggleSort }`. Clicking a column cycles ascending → descending → off. Numbers compare as numbers, everything else with Indonesian locale ordering. Pairs with `components/ui/sortable-th.tsx`. Used by the Data Member table. |
 
 ### `lib/`
 
@@ -219,11 +247,13 @@ Future feature actions follow the same steps, in Sembako's order: `requireRole(.
 |---|---|
 | `lib/auth/session.ts` | Server-only. `encrypt` / `decrypt` the JWT, `createSession`, `getSession`, `deleteSession`. Exports the `Role` and `SessionPayload` types. Crashes at startup if `SESSION_SECRET` is missing or shorter than 32 characters. See [AUTH.md](./AUTH.md). |
 | `lib/auth/dal.ts` | Server-only "data access layer" for auth. `verifySession()` (cached per request) and `requireRole(...roles)`. |
-| `lib/db/schema.ts` | The `role` enum and the `users` table. See [DATABASE.md](./DATABASE.md). |
+| `lib/db/schema.ts` | Enums, the `users`, `packages`, `members`, `memberships` and `payments` tables, and `member_no_seq`. See [DATABASE.md](./DATABASE.md). |
 | `lib/db/index.ts` | Server-only. Creates one `pg` connection pool and exports `db` (Drizzle). If `DATABASE_URL` contains `sslmode=require`, it strips that and connects with SSL that accepts self-signed certificates (needed by some hosted databases). |
 | `lib/db/seed.ts` | CLI (`npm run db:seed`). Creates `superadmin@mastergym.test` and `kasir@mastergym.test`, both with password `password123`. Running it twice fails on the duplicate email and changes nothing. **Dev only.** |
 | `lib/db/create-user.ts` | CLI (`npm run db:create-user -- --name=… --email=… --password=… --role=kasir|superadmin`). Validates the role against the enum, hashes the password, inserts the user. Use this on a real server instead of the seed. |
 | `lib/nav.ts` | The sidebar menu: `kasirSections` and `superadminSections`, each a list of `{ label, entries: [{ label, href, icon }] }`. `navForRole(role)` picks one. **To add a menu item, edit this file.** The page itself must still call `requireRole`; hiding a link is not security. |
+| `lib/format.ts` | `rupiah` (`Intl.NumberFormat`, "Rp150.000") and `formatDateId(date)`. |
+| `lib/uploads.ts` | `UPLOADS_DIR`, `saveBase64Upload` (validates type and size ≤ 2 MB, writes a random filename), `readUpload` (rejects paths outside the folder). |
 | `lib/utils.ts` | `cn(...classes)`: joins class names and resolves Tailwind conflicts (`clsx` + `tailwind-merge`). Used everywhere. |
 
 ---
@@ -237,6 +267,7 @@ Defined in `.env` (local, gitignored; copy from `.env.example`).
 | `DATABASE_URL` | app, drizzle-kit, CLI scripts | Postgres connection string. Native Postgres: port 5432. Docker Postgres: port 5434. |
 | `SESSION_SECRET` | `lib/auth/session.ts` | Key that signs the login cookie. ≥ 32 characters. Generate with `openssl rand -base64 32`. Changing it logs everyone out. |
 | `NEXT_SERVER_ACTIONS_ENCRYPTION_KEY` | Next.js | Keeps Server Action IDs stable across builds and containers. 32-byte base64. |
+| `UPLOADS_DIR` | `lib/uploads.ts` | Folder for member photos. Optional; defaults to `./uploads`. Docker sets `/app/uploads` (the `uploads_data` volume). |
 | `DB_HOST_PORT` | `docker-compose.yml` | Host port for the Docker Postgres (5434). |
 | `APP_HOST_PORT` | `docker-compose.yml` | Host port for the Docker app (3002). |
 | `APP_IMAGE` | `docker-compose.yml` | Image tag for the built app (`master-gym:dev`). |
@@ -254,6 +285,7 @@ Defined in `.env` (local, gitignored; copy from `.env.example`).
 | `npm run build` | Production build (also type-checks). |
 | `npm run start` | Runs the production build. |
 | `npm run lint` | ESLint. |
+| `npm test` | Vitest, runs once (`vitest run`). |
 | `npm run db:push` | Makes the database match `lib/db/schema.ts` (creates/changes tables). |
 | `npm run db:generate` | Writes SQL migration files into `lib/db/migrations` (not used so far). |
 | `npm run db:studio` | Opens Drizzle Studio, a browser UI to look at the data. |
@@ -275,4 +307,8 @@ Defined in `.env` (local, gitignored; copy from `.env.example`).
 | Change who can open a page | The `requireRole(...)` call in that page |
 | Change how long a login lasts | `SESSION_DURATION_MS` and `setExpirationTime("7d")` in `lib/auth/session.ts` |
 | Add a shadcn component | `npx shadcn add <name>` (writes into `components/ui/`) |
+| Change how membership status or end date is worked out | `features/membership/logic.ts` (and its test) |
+| Change the member PDF card layout | `features/membership/member-pdf.ts` |
+| Change photo size or allowed types | `lib/uploads.ts` |
+| Add a payment method | `payment_method` enum in `lib/db/schema.ts`, then `PAYMENT_METHOD_LABELS` in `features/membership/validation.ts` |
 | Change Docker ports | `.env` (`APP_HOST_PORT`, `DB_HOST_PORT`) |

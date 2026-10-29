@@ -31,9 +31,81 @@
 
 Changed on day 1: added `role`; removed `failed_login_attempts` and `locked_until` (the login lockout was removed). An older database needs `npm run db:push` to catch up.
 
+### Enums (day 2)
+
+| Enum | Values |
+|---|---|
+| `gender` | `male`, `female` |
+| `member_category` | `pelajar`, `mahasiswa`, `umum` (decides which monthly base price applies) |
+| `payment_method` | `cash`, `qris`, `transfer`, `debit` |
+
+Sequence `member_no_seq`: source of member numbers (`MG-0001`, formatted in code with `nextval`).
+
+All money columns are `decimal(14,2)` (whole Rupiah as `number` in TypeScript). Plain dates are `date` read as `"YYYY-MM-DD"` strings.
+
+### Table `category_prices`
+
+Set by the superadmin in Membership → Pengaturan Harga. A membership costs `price_per_month` × the package's `months`, computed on the server at save time. A category with no row has no price yet, so it can't be sold.
+
+| Column | Type | Notes |
+|---|---|---|
+| `category` | `member_category` PK | One row per category |
+| `price_per_month` | `decimal(14,2)` not null | Monthly base price |
+| `updated_at` | `timestamp` not null, default now | |
+
+### Table `packages`
+
+| Column | Type | Notes |
+|---|---|---|
+| `id` | `bigserial` PK | |
+| `name` | `varchar(100)` not null | |
+| `months` | `integer` not null | Duration |
+| `is_active` | `boolean` not null, default true | Inactive packages can't be sold but old memberships keep working |
+| `created_at`, `updated_at` | `timestamp` not null, default now | |
+
+### Table `members`
+
+| Column | Type | Notes |
+|---|---|---|
+| `id` | `bigserial` PK | |
+| `member_no` | `varchar(20)` not null, **unique** | `MG-0001` |
+| `name` | `varchar(100)` not null | |
+| `phone` | `varchar(20)` not null, **unique** | Normalised to `08...` |
+| `birth_date` | `date` nullable | |
+| `gender` | `gender` not null | |
+| `category` | `member_category` not null | |
+| `photo_path` | `varchar(255)` not null | File under the uploads dir, never `public/` |
+| `qr_token` | `varchar(64)` not null, **unique** | The only QR content |
+| `created_at`, `updated_at` | `timestamp` not null, default now | |
+
+### Table `memberships`
+
+One row per purchase/renewal period.
+
+| Column | Type | Notes |
+|---|---|---|
+| `id` | `bigserial` PK | |
+| `member_id` | FK `members.id` not null | |
+| `package_id` | FK `packages.id` not null | |
+| `package_name`, `months`, `category`, `price` | not null | Copied at purchase time, so later price changes don't rewrite history |
+| `start_date`, `end_date` | `date` not null | `end_date` is inclusive |
+| `created_at` | `timestamp` not null, default now | |
+
+### Table `payments`
+
+1..n rows per purchase (split payment).
+
+| Column | Type | Notes |
+|---|---|---|
+| `id` | `bigserial` PK | |
+| `membership_id` | FK `memberships.id`, **nullable** | Later days add more nullable link columns (PT, sales) |
+| `method` | `payment_method` not null | |
+| `amount` | `decimal(14,2)` not null | Rows of one purchase sum to its price |
+| `paid_at` | `timestamp` not null, default now | |
+
 ### Planned tables (not built yet)
 
-From the spec and the decisions in [HANDOFF.md](./HANDOFF.md): `paket` (packages with a price per category), `member`, `membership` (each purchase/renewal period), `visit`, `trainer`, `program_pt`, `member_pt` (remaining PT sessions), `absensi` (check-ins), a transaction table with **1..n payment rows** (method + amount) for split payments, and the inventory/sales/purchases/expenses tables copied from Sembako. Money columns should be `decimal`, as in Sembako, to avoid rounding errors.
+`visit`, `trainer`, `program_pt`, `member_pt` (remaining PT sessions), `absensi` (check-ins), and the inventory/sales/purchases/expenses tables copied from Sembako.
 
 ## 3. Connecting
 
@@ -80,5 +152,5 @@ The `mastergym/mastergym` password is a public dev default. Use a real password 
 1. Edit `lib/db/schema.ts`.
 2. Run `npm run db:push` and **read what it says** before confirming. Dropping or renaming a column deletes that column's data.
 3. Multi-table writes (e.g. "save member + membership + payments") go inside `db.transaction(async (tx) => { ... })`, so a failure undoes all of it.
-4. Store money as `decimal`, dates without time as `date` (`"YYYY-MM-DD"`), and moments as `timestamp`.
+4. Store money as `decimal`, dates without time as `date` (`"YYYY-MM-DD"`), and moments as `timestamp`. `timestamp` columns (e.g. `payments.paid_at`) are without time zone and hold UTC wall-clock time (`now()` with the server time zone UTC), so day-5 "today" totals must convert to WIB first, e.g. `(paid_at AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Jakarta')::date = <todayWib()>`.
 5. Mention the change in this file.

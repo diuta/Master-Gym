@@ -65,7 +65,11 @@ docker compose -f docker-compose.prod.yml --env-file .env.production up -d --bui
 
 Then apply the schema and create real accounts (not the seed) through an SSH tunnel to `127.0.0.1:5432` on the server, with `npm run db:push` and `npm run db:create-user`.
 
-Not set up yet: HTTPS / reverse proxy, backups of the `postgres_data` volume, and the `uploads` volume for member photos (planned for day 2, as in Sembako).
+Member photos live in the `uploads_data` volume, mounted at `/app/uploads` (`UPLOADS_DIR`). The Dockerfile creates that folder owned by `nextjs`, so the container can write to it. Photos are served through `/api/uploads/...` behind login, never from `public/`.
+
+The webcam (`getUserMedia`) only works on `http://localhost` or HTTPS. If the desk PC opens the app via a LAN IP over plain HTTP, the camera is blocked; put HTTPS in front first.
+
+Not set up yet: HTTPS / reverse proxy, and backups of the `postgres_data` and `uploads_data` volumes.
 
 ## 5. Troubleshooting
 

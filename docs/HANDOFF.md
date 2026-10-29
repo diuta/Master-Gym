@@ -7,8 +7,10 @@ Last updated: 2026-10-28. Read this first when continuing on another PC or in a 
 A web app for the front desk of **Master Gym**: member check-in with a USB 2D barcode scanner, membership payments, a small shop (inventory, sales, purchases, expenses) and reports.
 
 - **Spec source:** "INFORMASI GENERAL APLIKASI GYM" (final discussion, 8 Oct 2026), summarized in section 3. The original file was in `Downloads` on the old PC and is **not** in the repo.
-- **Deadline:** end of October 2026.
-- **Reference project:** `Sembako` (same author), branch **`staging`**. Copy its patterns: folder layout, auth, the shadcn UI kit, the inventory/sales/purchase/expense logic.
+- **Deadline:** originally end of October 2026; **pushed back** (2026-10-28) so the full day 2–5 plan is kept, not cut.
+- **Reference project:** `Sembako` (same author), branch **`staging`**, checked out at `~/Uta/sembako-staging` on the Mac. Copy its patterns: folder layout, auth, the shadcn UI kit, the inventory/sales/purchase/expense logic.
+- **Branches:** work starts from `development`; the user creates a branch per feature and commits manually.
+- **Dev machine:** macOS now (the docs' Windows notes are from the old PC). Postgres runs in **Docker** (`docker compose up -d postgres`, port 5434).
 
 ## 2. Working rules (from the user, always apply)
 
@@ -66,36 +68,51 @@ A one-page **PDF** with QR code, name, member ID, phone, expiry date and photo. 
 | Corporate package | On hold |
 | PT sessions | At check-in, a checkbox "use PT this session" takes one session off the member's remaining PT sessions |
 | Renewal | The new period starts the day after the current one ends (or today if it has already expired) |
-| Package prices | Differ by category (Pelajar/Mahasiswa/Umum); the cashier manages them via Kelola Paket |
+| Package prices | Each category (Pelajar/Mahasiswa/Umum) has a monthly base price; price = base × package months. The **superadmin** sets base prices and manages packages in Membership → Pengaturan Harga; the cashier can't change either |
 | QR content | A **random token**, not the member number or personal data (QR codes can be read by any phone) |
 | Hosting | Will be online later. Not a concern yet |
 | Payments | Planned: each transaction has 1..n payment rows (method + amount), so split payments and Cash/Bank reports work everywhere |
+| Payment methods | **Cash, QRIS, Transfer, Debit** (like Sembako). Reports group QRIS/Transfer/Debit as "Bank" |
+| Member number | `MG-0001` (prefix + 4-digit sequence) |
+| Package duration | In **months** (calendar months) |
+| Package price on forms | Computed from package + category, **read-only** for the cashier (changed 2026-10-28, was editable) |
+| Member phone | **Unique** per member |
+| Member photo | **Required** at registration |
+| PDF/QR libraries | `qrcode` + `jspdf` approved |
+| Member check-in | Scan → pop-up with photo + name; the admin compares the person to the photo, then clicks **Check-In** (never automatic) |
+| Visitor check-in | **Not** automatic on payment: the admin checks the visitor in separately on the Absen page |
+| Locker number | Optional |
+| Expired members | Blocked from check-in (pop-up shows "Expired", button disabled) |
 
-## 5. Current state (end of day 1)
+## 5. Current state (end of day 2)
 
-Branch: **`dev/scaffolding`** (based on the `foundation` commit). Day 1 changes are ready for the user to commit with:
-`Add kasir/superadmin roles, spec menus, dark navy theme and remove login lockout`
+Day 2 (member registration) is built, verified and through its final review/fix pass. The dev DB was wiped and reseeded on 2026-10-28 because it predated day 1.
 
 **Done**
-- `users.role` enum (`superadmin`, `kasir`); the session carries the role; `requireRole()` in `lib/auth/dal.ts` guards every page on the server.
-- Sidebar menus per role in `lib/nav.ts`; 13 placeholder pages under `app/(app)/` (`membership/*`, `inventory`, `sales/*`, `purchases/*`, `expenses`, `reports`, `administration/account-settings`, `dashboard`).
-- Dark navy/orange theme in `app/globals.css`; `next-themes` removed.
-- Fixed a hydration mismatch at phone width in `hooks/use-mobile.ts` (`useSyncExternalStore`). **Sembako still has this bug.**
-- Seed accounts: `superadmin@mastergym.test` and `kasir@mastergym.test`, password `password123` (dev only).
-- Docker tested: compose project `master-gym-dev` with the `app` container (port 3002) and `postgres:16-alpine` (127.0.0.1:5434).
-- Verified: lint, type check and build pass; both logins, the menus and the role redirects were tested in a browser.
+- Day 1 (foundation): roles, `requireRole()`, sidebar menus per role, 13 pages, dark navy/orange theme, seed accounts `superadmin@mastergym.test` / `kasir@mastergym.test` (password `password123`, dev only).
+- Day 2 code in `features/membership/` (logic and validation have unit tests, run with `npm test`); 4 new tables (`packages`, `members`, `memberships`, `payments`) and the `member_no_seq` sequence; `lib/uploads.ts` + `/api/uploads/[...path]` (photos, kasir only) + the Docker `uploads_data` volume.
+- **Pembayaran:** the Daftar Member Baru wizard (details, webcam photo, package + read-only price, split payment, review) via `registerMemberAction`; the server recomputes the price and rejects a stale one ("Harga sudah berubah, muat ulang halaman."); duplicate phone numbers are handled.
+- **Pengaturan Harga** (superadmin, `/membership/pricing`): monthly base price per category (`category_prices` table) and the Kelola Paket pop-up (packages are name + months only).
+- **Member PDF card** (90×160 mm, QR + photo + details) downloaded in the browser with `jspdf` + `qrcode`.
+- **Data Member:** list with search, status filter (Aktif / Segera Habis / Sudah Habis) and an Edit dialog (including photo retake).
+- Verified by the controller in a browser as kasir with a simulated webcam: package add/delete, full registration with split payment, duplicate-phone handling, PDF card (QR decodes to `qr_token`), Data Member statuses/filters/search, Edit with photo retake, superadmin redirected away from the membership pages.
+- Docker: image builds, app answers on :3002, `/app/uploads` is owned by `nextjs`, app restarts cleanly.
 
 **Not done / known gaps**
+- Test with the real USB scanner and the real webcam on the front-desk PC.
+- The webcam needs HTTPS if the app is opened over the LAN (`localhost` is fine).
+- Orphan photo files are kept when a member's photo is replaced (shortcut; clean up later if disk matters).
+- Data Member loads all members at once (shortcut; add pagination if the list gets long).
 - The real logo and colours are pending (send the logo → update `app/globals.css` and the "M" badge in `components/app-sidebar.tsx`).
 - `docs/superpowers/specs/2026-10-17-foundation-design.md` is outdated (it describes the old single-account version).
-- No tests yet.
+- `package-lock.json` must be regenerated with npm 10 (the Docker image's npm): a lock written by npm 11 made `npm ci` fail in Docker (missing optional `esbuild` entries). If it happens again: `docker run --rm -v "$PWD":/w -w /w node:20-alpine npm install --package-lock-only --ignore-scripts`.
 
 ## 6. Set up on a new PC
 
 1. Install **Node 20+**, **PostgreSQL 16** (same major version as Sembako) and optionally **Docker Desktop**.
    - Docker Desktop on Windows needs WSL2. If it hangs on "Starting the Docker Engine", quit it fully, run `wsl --shutdown`, and start it again.
    - Docker Desktop doesn't start with Windows; open it before running `docker compose`.
-2. Get the code, check out `dev/scaffolding`, then run `npm ci`.
+2. Get the code, check out the working branch, then run `npm ci`.
 3. `cp .env.example .env`, then fill `SESSION_SECRET` and `NEXT_SERVER_ACTIONS_ENCRYPTION_KEY` (`openssl rand -base64 32` each).
 4. Database. Choose one:
    - **Native Postgres:** create a user and database, e.g. `CREATE ROLE mastergym LOGIN PASSWORD 'mastergym'; CREATE DATABASE mastergym OWNER mastergym;`, and set `DATABASE_URL=postgres://mastergym:mastergym@localhost:5432/mastergym` in `.env`.
@@ -103,7 +120,7 @@ Branch: **`dev/scaffolding`** (based on the `foundation` commit). Day 1 changes 
 5. `npm run db:push`, then `npm run db:seed`, then `npm run dev` → http://localhost:3000.
 6. Install the skills listed in section 2.
 
-## 7. Next: day 2 (member registration)
+## 7. Day 2: member registration (done, kept for reference)
 
 Build order for the remaining days: **day 2** members → **day 3** check-in, attendance, renewal, visit, PT add-on → **day 4** inventory, sales, purchases, expenses (copied from Sembako) → **day 5** dashboards and reports, then testing with the real scanner. Each day has its own section below (scope, questions to ask first, and when it counts as done). The deadline is end of October, so scope may need cutting. Ask the user.
 
@@ -115,17 +132,9 @@ Build order for the remaining days: **day 2** members → **day 3** check-in, at
 3. Member PDF (QR + details + photo) to download.
 4. Data Member list with search and status filters.
 
-**New libraries proposed (the user must approve):** `qrcode` (QR image) and `jspdf` (PDF; Sembako already uses it). Photo upload should reuse Sembako's `lib/uploads.ts` + `app/api/uploads` + a Docker `uploads` volume.
+**New libraries (approved):** `qrcode` (QR image) and `jspdf` (PDF; Sembako already uses it). Photo upload should reuse Sembako's `lib/uploads.ts` + `app/api/uploads` + a Docker `uploads` volume.
 
-**Open questions to ask the user before starting day 2**
-1. Member number format, e.g. `MG-0001`?
-2. Package duration in days, months, or both?
-3. Price auto-filled from package + category and editable, or always typed by hand?
-4. Payment methods: only Cash/Bank, or Bank split into QRIS/Transfer/Debit like Sembako?
-5. Must the phone number be unique per member? (It's the check-in fallback.)
-6. Is the photo required or optional?
-
-Earlier assumptions waiting for confirmation: visitors are checked in automatically when their visit is paid; the locker number is optional; expired members can't check in (the pop-up shows "Expired" and the button is disabled).
+**Day 2 questions:** all answered on 2026-10-28, see the table in section 4.
 
 **Day 2 is done when:** the cashier can create packages, register a member with a photo and a split payment, download that member's PDF, and find the member in Data Member with the right status.
 
@@ -150,7 +159,6 @@ Pages: `/membership/check-in`, `/membership/attendance`, and the remaining forms
 2. Is a trainer chosen when PT is bought, or when it's used at check-in?
 3. Do "per visit" PT programs count as 1 session each?
 4. Do visitors need anything printed or shown (e.g. a receipt), or only a record?
-5. Confirm the assumptions at the end of section 7 (auto check-in for visitors, optional locker, expired members blocked).
 
 **Day 3 is done when:** scanning a member's PDF QR with the real scanner opens their pop-up and checks them in; the phone-number fallback works; visits, renewals and PT add-ons save with split payments; Riwayat Absen shows members and visitors.
 
