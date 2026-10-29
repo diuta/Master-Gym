@@ -98,14 +98,29 @@ One row per purchase/renewal period.
 | Column | Type | Notes |
 |---|---|---|
 | `id` | `bigserial` PK | |
-| `membership_id` | FK `memberships.id`, **nullable** | Later days add more nullable link columns (PT, sales) |
+| `membership_id` | FK `memberships.id`, nullable | Link to a registration/renewal |
+| `visit_id` | FK `visits.id`, nullable | Link to a visit (day 3) |
+| `pt_purchase_id` | FK `pt_purchases.id`, nullable | Link to a PT purchase (day 3) |
 | `method` | `payment_method` not null | |
 | `amount` | `decimal(14,2)` not null | Rows of one purchase sum to its price |
 | `paid_at` | `timestamp` not null, default now | |
 
-### Planned tables (not built yet)
+Check `payments_one_link`: `num_nonnulls(membership_id, visit_id, pt_purchase_id) = 1`, so every payment row belongs to exactly one purchase. Later days add more link columns (sales, purchases) and must extend this check.
 
-`visit`, `trainer`, `program_pt`, `member_pt` (remaining PT sessions), `absensi` (check-ins), and the inventory/sales/purchases/expenses tables copied from Sembako.
+### Day 3 tables
+
+| Table | Columns | Notes |
+|---|---|---|
+| `visit_price` | `id` PK default 1, `price` decimal, `updated_at` | **Single row**: check `visit_price_single_row` (`id = 1`). Set by the superadmin. No row = Visit can't be sold |
+| `trainers` | `id`, `name`, `phone`, `is_active`, `created_at`, `updated_at` | Managed by the superadmin; deleting a trainer used in a check-in only deactivates it (same for a PT program with purchases) |
+| `pt_programs` | `id`, `name`, `sessions`, `price`, `is_active`, `created_at`, `updated_at` | "Per visit" = 1 session |
+| `pt_purchases` | `id`, `member_id` FK, `pt_program_id` FK, `program_name`, `sessions`, `price`, `created_at` | Name, sessions and price are **copied** from the program at purchase time |
+| `visits` | `id`, `name`, `phone`, `price`, `locker_no` nullable, `created_at` | A walk-in without membership. The row **is** the visitor check-in (`created_at` = check-in time). Index on `created_at` |
+| `check_ins` | `id`, `member_id` FK, `locker_no` nullable, `trainer_id` FK **nullable**, `checked_in_at` | One row per member check-in. `trainer_id` set = a PT session was used. Indexes on `checked_in_at` and `member_id` |
+
+**PT balance is computed, not stored:** sum of `pt_purchases.sessions` for the member minus the count of that member's `check_ins` with `trainer_id` not null. PT sessions never expire. Check-in locks the member row so the balance can't go below zero.
+
+Planned (not built yet): the inventory/sales/purchases/expenses tables copied from Sembako.
 
 ## 3. Connecting
 

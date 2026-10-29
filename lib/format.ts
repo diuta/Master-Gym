@@ -16,3 +16,12 @@ export function formatDateId(date: string): string {
     timeZone: "UTC",
   }).format(new Date(Date.UTC(y, m - 1, d)));
 }
+
+// "07.12" in Jakarta time, whatever the server/browser timezone is.
+export function formatTimeWib(d: Date): string {
+  return new Intl.DateTimeFormat("id-ID", {
+    timeZone: "Asia/Jakarta",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(d);
+}
