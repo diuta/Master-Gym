@@ -1,7 +1,13 @@
 import { requireRole } from "@/lib/auth/dal";
-import { PlaceholderPage } from "@/components/placeholder-page";
+import { listProducts } from "@/features/shop/queries";
+import { SaleWizard } from "@/features/shop/sale-wizard";
 
 export default async function Page() {
   await requireRole("kasir");
-  return <PlaceholderPage title="Tambah Penjualan" />;
+  return (
+    <div className="space-y-6">
+      <h1 className="text-2xl font-semibold">Tambah Penjualan</h1>
+      <SaleWizard products={await listProducts()} />
+    </div>
+  );
 }

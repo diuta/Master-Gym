@@ -2,7 +2,7 @@
 
 [Back to README](../README.md) · Related docs: [AUTH](./AUTH.md) · [DATABASE](./DATABASE.md) · [UI](./UI.md) · [DOCKER](./DOCKER.md) · [HANDOFF](./HANDOFF.md)
 
-This document explains **what every part of the code does, where it lives, and how a request flows through it**. It describes the code as of the end of day 3 (2026-10-29): login, roles, layout, member registration (packages, wizard, PDF card, Data Member), check-in, visits, renewals, PT add-ons and placeholder pages for the rest. Update it when a feature lands.
+This document explains **what every part of the code does, where it lives, and how a request flows through it**. It describes the code as of the end of day 4 (2026-10-30): login, roles, layout, member registration (packages, wizard, PDF card, Data Member), check-in, visits, renewals, PT add-ons, the shop (inventory, sales, purchases, expenses) and placeholder pages for the rest (Dashboard, Laporan, Pengaturan Akun). Update it when a feature lands.
 
 ---
 
@@ -49,16 +49,19 @@ master-gym/
 │       ├── dashboard/        "/dashboard"   (both roles; title differs)
 │       ├── membership/       check-in, attendance, members, payment   (kasir)
 │       ├── inventory/        (kasir)
-│       ├── sales/            new, history   (kasir)
-│       ├── purchases/        new, history   (kasir)
-│       ├── expenses/         (kasir)
+│       ├── sales/            new (kasir), history (both)
+│       ├── purchases/        new (kasir), history (both)
+│       ├── expenses/         (both)
 │       ├── reports/          (superadmin)
 │       └── administration/account-settings/   (superadmin)
 ├── features/                 Business code, grouped by domain
 │   ├── authentication/       login page, login/logout Server Actions, Zod schema
-│   └── membership/           packages, registration, PDF card, Data Member, check-in, visits, renewal, PT (days 2–3)
+│   ├── membership/           packages, registration, PDF card, Data Member, check-in, visits, renewal, PT (days 2–3)
+│   ├── shop/                 products, stock ledger, sales, purchases, histories (day 4)
+│   └── expenses/             expenses and expense categories (day 4)
 ├── components/
 │   ├── app-sidebar.tsx       The logged-in sidebar (menu per role, user box, logout)
+│   ├── period-filter.tsx     Period dropdown + custom dates for the history pages (URL params)
 │   ├── placeholder-page.tsx  "Halaman ini belum tersedia" page used by every unbuilt menu
 │   └── ui/                   shadcn/Base UI kit + a few house components (see UI.md)
 ├── hooks/
@@ -73,6 +76,7 @@ master-gym/
 │   ├── uploads.ts            Save/read member photos on disk (UPLOADS_DIR)
 │   ├── db/seed.ts            CLI: creates the two dev accounts
 │   ├── db/create-user.ts     CLI: creates one account with a hashed password
+│   ├── period.ts             Period options and WIB date ranges (today/week/month/year/all/custom)
 │   ├── nav.ts                Sidebar menu definition per role
 │   └── utils.ts              cn() — merges Tailwind class names
 ├── proxy.ts                  Runs before every page: redirects to /login if not logged in
@@ -106,12 +110,12 @@ master-gym/
 | `/membership/payment` | `.../membership/payment/page.tsx` | kasir | Pembayaran: form picker driven by `?form=new\|visit\|renew\|addon&member=<id>` (Daftar Member Baru, Visit, Perpanjang, Add-On PT) |
 | `/membership/pricing` | `.../membership/pricing/page.tsx` | superadmin | Pengaturan Harga: monthly base price per category, Harga Visit, Kelola Paket, Kelola Trainer, Kelola Program PT |
 | `/api/uploads/...` | `app/api/uploads/[...path]/route.ts` | kasir | Member photo files (`requireRole`, so not-logged-in or superadmin is redirected; `proxy.ts` skips `/api`) |
-| `/inventory` | `app/(app)/inventory/page.tsx` | kasir | Placeholder "Inventori" |
-| `/sales/new` | `app/(app)/sales/new/page.tsx` | kasir | Placeholder "Tambah Penjualan" |
-| `/sales/history` | `app/(app)/sales/history/page.tsx` | kasir | Placeholder "Riwayat Penjualan" |
-| `/purchases/new` | `app/(app)/purchases/new/page.tsx` | kasir | Placeholder "Tambah Pembelian" |
-| `/purchases/history` | `app/(app)/purchases/history/page.tsx` | kasir | Placeholder "Riwayat Pembelian" |
-| `/expenses` | `app/(app)/expenses/page.tsx` | kasir | Placeholder "Pengeluaran" |
+| `/inventory` | `app/(app)/inventory/page.tsx` | kasir | Inventori: summary, product table, Kelola Kategori, Tambah Produk wizard, Edit |
+| `/sales/new` | `app/(app)/sales/new/page.tsx` | kasir | Tambah Penjualan: 4-step wizard |
+| `/sales/history` | `app/(app)/sales/history/page.tsx` | both | Riwayat Penjualan: `?period=&from=&to=&product=`, Detail; Batalkan for the superadmin only |
+| `/purchases/new` | `app/(app)/purchases/new/page.tsx` | kasir | Tambah Pembelian: 4-step wizard, Kelola Supplier |
+| `/purchases/history` | `app/(app)/purchases/history/page.tsx` | both | Riwayat Pembelian: one row per item, `?period=&from=&to=`, Detail; Batalkan for the superadmin only |
+| `/expenses` | `app/(app)/expenses/page.tsx` | both | Pengeluaran: kasir form + history; superadmin history, Hapus and Kelola Kategori |
 | `/reports` | `app/(app)/reports/page.tsx` | superadmin | Placeholder "Laporan" |
 | `/administration/account-settings` | `.../administration/account-settings/page.tsx` | superadmin | Placeholder "Pengaturan Akun" |
 
@@ -232,6 +236,29 @@ Future feature actions follow the same steps, in Sembako's order: `requireRole(.
 | `member-detail-dialog.tsx` | Detail pop-up: PT balance + check-in history. |
 | `*.test.ts` | Vitest unit tests for `logic.ts` and `validation.ts`. |
 
+### `features/shop/`
+
+| File | What it does |
+|---|---|
+| `logic.ts` | Pure functions (tested): `movingAverage`, `reverseAverage`, `stockStatus`, `itemsTotal`, `formatInvoiceNo`. |
+| `validation.ts` | Zod schemas (product, category, supplier, `SaleSchema`, `PurchaseSchema`) with Indonesian messages. Limits follow the DB column sizes. |
+| `stock.ts` | Locking and summing helpers: `lockProducts` (row lock) and `stockSubquery` (sum of the ledger). The actions in `actions.ts` insert the movement rows in the same transaction after locking. |
+| `queries.ts` | Server-only reads: products with stock, active categories and suppliers, `listSales`, `listPurchaseItems`, sale/purchase detail. |
+| `actions.ts` | `"use server"`. Kasir: product, category and supplier CRUD, `createSaleAction`, `createPurchaseAction` (prices and stock reloaded on the server). Kasir + superadmin: detail actions. Superadmin only: `cancelSaleAction`, `cancelPurchaseAction`. |
+| `inventory-page.tsx`, `add-product-wizard.tsx`, `edit-product-dialog.tsx`, `kelola-kategori-produk-dialog.tsx` | Inventori and its pop-ups. |
+| `sale-wizard.tsx`, `purchase-wizard.tsx`, `product-picker.tsx`, `kelola-supplier-dialog.tsx` | The two 4-step wizards (reuse `payment-rows.tsx`), the product search, and Kelola Supplier. |
+| `sales-history-page.tsx`, `purchases-history-page.tsx`, `transaction-detail-dialog.tsx`, `cancel-button.tsx` | History tables, the Detail pop-up and the superadmin Batalkan button with confirm. |
+| `*.test.ts` | Vitest tests for `logic.ts` and `validation.ts`. |
+
+### `features/expenses/`
+
+| File | What it does |
+|---|---|
+| `validation.ts`, `validation.test.ts` | Expense and category schemas (category required, no future date) and their tests. |
+| `queries.ts` | `listActiveExpenseCategories`, `listExpenses(range)`. |
+| `actions.ts` | `"use server"`. Kasir: `createExpenseAction`. Superadmin: `deleteExpenseAction` and expense category create/update/delete. |
+| `expenses-page.tsx`, `delete-expense-button.tsx`, `kelola-kategori-pengeluaran-dialog.tsx` | The page (form for kasir, history for both), Hapus with confirm, Kelola Kategori. |
+
 ### `components/`
 
 | File | What it does |
@@ -253,11 +280,12 @@ Future feature actions follow the same steps, in Sembako's order: `requireRole(.
 |---|---|
 | `lib/auth/session.ts` | Server-only. `encrypt` / `decrypt` the JWT, `createSession`, `getSession`, `deleteSession`. Exports the `Role` and `SessionPayload` types. Crashes at startup if `SESSION_SECRET` is missing or shorter than 32 characters. See [AUTH.md](./AUTH.md). |
 | `lib/auth/dal.ts` | Server-only "data access layer" for auth. `verifySession()` (cached per request) and `requireRole(...roles)`. |
-| `lib/db/schema.ts` | Enums, the `users`, `packages`, `members`, `memberships`, `payments` and the day 3 tables (`visit_price`, `trainers`, `pt_programs`, `pt_purchases`, `visits`, `check_ins`), and `member_no_seq`. See [DATABASE.md](./DATABASE.md). |
+| `lib/db/schema.ts` | Enums, the `users`, `packages`, `members`, `memberships`, `payments`, the day 3 tables (`visit_price`, `trainers`, `pt_programs`, `pt_purchases`, `visits`, `check_ins`), the day 4 shop tables (products, categories, suppliers, `stock_movements`, sales, purchases, expenses), and the number sequences. See [DATABASE.md](./DATABASE.md). |
 | `lib/db/index.ts` | Server-only. Creates one `pg` connection pool and exports `db` (Drizzle). If `DATABASE_URL` contains `sslmode=require`, it strips that and connects with SSL that accepts self-signed certificates (needed by some hosted databases). |
-| `lib/db/seed.ts` | CLI (`npm run db:seed`). Creates `superadmin@mastergym.test` and `kasir@mastergym.test`, both with password `password123`. Running it twice fails on the duplicate email and changes nothing. **Dev only.** |
+| `lib/db/seed.ts` | CLI (`npm run db:seed`). Creates `superadmin@mastergym.test` and `kasir@mastergym.test`, both with password `password123`. Safe to run again: existing accounts and expense categories are skipped; it also adds the six default expense categories. **Dev only.** |
 | `lib/db/create-user.ts` | CLI (`npm run db:create-user -- --name=… --email=… --password=… --role=kasir|superadmin`). Validates the role against the enum, hashes the password, inserts the user. Use this on a real server instead of the seed. |
 | `lib/nav.ts` | The sidebar menu: `kasirSections` and `superadminSections`, each a list of `{ label, entries: [{ label, href, icon }] }`. `navForRole(role)` picks one. **To add a menu item, edit this file.** The page itself must still call `requireRole`; hiding a link is not security. |
+| `lib/period.ts` | `PERIOD_OPTIONS`, `parsePeriod`, `periodRange` (WIB date range for a period; tested in `period.test.ts`). Used by the history pages. |
 | `lib/format.ts` | `rupiah` (`Intl.NumberFormat`, "Rp150.000"), `formatDateId(date)` and `formatTimeWib(date)` (HH.mm, Asia/Jakarta). |
 | `lib/uploads.ts` | `UPLOADS_DIR`, `saveBase64Upload` (validates type and size ≤ 2 MB, writes a random filename), `readUpload` (rejects paths outside the folder). |
 | `lib/utils.ts` | `cn(...classes)`: joins class names and resolves Tailwind conflicts (`clsx` + `tailwind-merge`). Used everywhere. |
