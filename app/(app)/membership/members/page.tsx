@@ -1,7 +1,9 @@
 import { requireRole } from "@/lib/auth/dal";
-import { PlaceholderPage } from "@/components/placeholder-page";
+import { listMembers } from "@/features/membership/queries";
+import { MembersPage } from "@/features/membership/members-page";
 
 export default async function Page() {
   await requireRole("kasir");
-  return <PlaceholderPage title="Data Member" />;
+  const members = await listMembers();
+  return <MembersPage members={members} />;
 }

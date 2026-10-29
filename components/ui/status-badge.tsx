@@ -10,6 +10,9 @@ export type StatusKind =
   | "out_of_stock"
   | "low_stock"
   | "in_stock"
+  | "member_active"
+  | "member_expiring"
+  | "member_expired"
 
 const statusConfig: Record<
   StatusKind,
@@ -49,6 +52,21 @@ const statusConfig: Record<
     label: "Stok Aman",
     icon: CheckCircle2,
     className: "bg-success/10 text-success border-success/30",
+  },
+  member_active: {
+    label: "Aktif",
+    icon: CheckCircle2,
+    className: "bg-success/10 text-success border-success/30",
+  },
+  member_expiring: {
+    label: "Habis ≤ 7 Hari",
+    icon: AlertTriangle,
+    className: "bg-warning/15 text-warning-foreground border-warning/40",
+  },
+  member_expired: {
+    label: "Sudah Habis",
+    icon: XCircle,
+    className: "bg-destructive/10 text-destructive border-destructive/30",
   },
 }
 

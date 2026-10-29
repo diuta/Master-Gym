@@ -6,6 +6,7 @@ import {
   History,
   LayoutDashboard,
   Package,
+  Tags,
   ReceiptText,
   ShoppingCart,
   UserCog,
@@ -70,6 +71,10 @@ const superadminSections: NavSection[] = [
       { label: "Home", href: "/dashboard", icon: LayoutDashboard },
       { label: "Laporan", href: "/reports", icon: BarChart3 },
     ],
+  },
+  {
+    label: "MEMBERSHIP",
+    entries: [{ label: "Pengaturan Harga", href: "/membership/pricing", icon: Tags }],
   },
   {
     label: "ADMINISTRASI",
