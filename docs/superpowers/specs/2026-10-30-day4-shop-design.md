@@ -2,6 +2,8 @@
 
 Date: 2026-10-30 · Status: implemented
 
+> **Differs from the build:** invoice numbers come from the Postgres sequences `sale_no_seq` / `purchase_no_seq`, not from the row id, so a failed save can skip a number. `product_categories` also has `is_active`. [DATABASE.md](../../DATABASE.md) describes what was built.
+
 Read with [HANDOFF.md](../../HANDOFF.md) (section 3 Kasir items 3–8, section 9 day 4), [DATABASE.md](../../DATABASE.md) and the day 3 design ([2026-10-29-day3-checkin-design.md](./2026-10-29-day3-checkin-design.md)). Day 2–3 conventions (money as `decimal(14,2)`, WIB "today", 1..n payment rows, Server Action shape, UI rules, never commit) carry over unchanged.
 
 ## 1. Why
