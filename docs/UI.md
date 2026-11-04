@@ -84,11 +84,11 @@ These are **shadcn/ui** components (`base-nova` style, built on **Base UI**). Th
 | `currency-input.tsx` | Rupiah input: shows "Rp" and thousands separators (`150.000`) while you type, and keeps the raw digits (`150000`). Pass `name` to also submit a hidden field with the raw digits in a `<form>`, or use `value` + `onChange(raw)` |
 | `wizard.tsx` | Multi-step forms: `useWizard(steps)` (index, `goNext`, `goBack`, `goTo`, `reset`, `isFirst`/`isLast`), `WizardStepIndicator` ("step 2 of 4" with labels), `WizardStep`, `WizardNav` (big Back/Next buttons), `onWizardEnterAdvance` (Enter = next). For the inventory, sales and purchase wizards |
 | `empty-state.tsx` | Icon + title + description for "nothing here" (used by `PlaceholderPage`) |
-| `status-badge.tsx` | Coloured badge with icon + text for statuses: `success`, `cancelled`, `paid`, `unpaid`, `out_of_stock`, `low_stock`, `in_stock`. Membership: `member_active`, `member_expiring`, `member_expired` (Aktif / Segera Habis / Sudah Habis). Add new statuses here |
+| `status-badge.tsx` | Coloured badge with icon + text for statuses: `success`, `cancelled`, `paid`, `unpaid`, `out_of_stock`, `low_stock`, `in_stock`. Membership: `member_active`, `member_expiring`, `member_expired` (Aktif / Habis ≤ 7 Hari / Sudah Habis). Attendance: `member`, `visitor` (Member / Visitor). Add new statuses here |
 | `lib/format.ts` (not in `ui/`) | `rupiah` (an `Intl.NumberFormat` giving "Rp150.000") and `formatDateId("2026-10-28")` (Indonesian date). Use these instead of formatting money or dates by hand |
-| `sortable-th.tsx` | A table header cell that sorts on click. Use with `hooks/use-sort.ts` |
+| `sortable-th.tsx` | A table header cell that sorts on click. Use with `hooks/use-sort.ts` (Data Member, Inventori) |
 | `required-mark.tsx` | The red `*` after a required field's label |
-| `floating-dropdown.tsx` | Positions a dropdown under an input via a portal, so it isn't cut off inside scrolling dialogs (used by Sembako's search comboboxes) |
+| `floating-dropdown.tsx` | Positions a dropdown under an input via a portal, so it isn't cut off inside scrolling dialogs. Copied from Sembako (its search comboboxes) but **not used anywhere in Master Gym yet** |
 
 ## 4. Design rules (from Sembako's `DESIGN_PRINCIPLES.md`)
 

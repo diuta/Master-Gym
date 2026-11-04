@@ -1,6 +1,6 @@
 # Master Gym — Handoff Context
 
-Last updated: 2026-10-30. Read this first when continuing on another PC or in a new AI session.
+Last updated: 2026-11-04. Read this first when continuing on another PC or in a new AI session.
 
 ## 1. What this project is
 
@@ -70,7 +70,7 @@ A one-page **PDF** with QR code, name, member ID, phone, expiry date and photo. 
 | Package prices | Each category (Pelajar/Mahasiswa/Umum) has a monthly base price; price = base × package months. The **superadmin** sets base prices and manages packages in Membership → Pengaturan Harga; the cashier can't change either |
 | QR content | A **random token**, not the member number or personal data (QR codes can be read by any phone) |
 | Hosting | Will be online later. Not a concern yet |
-| Payments | Planned: each transaction has 1..n payment rows (method + amount), so split payments and Cash/Bank reports work everywhere |
+| Payments | Each transaction has 1..n payment rows (method + amount), so split payments and Cash/Bank reports work everywhere. Built for memberships, visits, PT, sales and purchases; expenses use one method and no payment rows |
 | Payment methods | **Cash, QRIS, Transfer, Debit** (like Sembako). Reports group QRIS/Transfer/Debit as "Bank" |
 | Member number | `MG-0001` (prefix + 4-digit sequence) |
 | Package duration | In **months** (calendar months) |
@@ -97,9 +97,9 @@ A one-page **PDF** with QR code, name, member ID, phone, expiry date and photo. 
 | Initial stock | Can be entered when adding a product (writes an `initial` movement), so existing stock loads at launch |
 | Expired members | Blocked from check-in: the pop-up shows "Expired", Check-In is disabled (also refused on the server), and **Perpanjang** opens the renewal form with that member selected |
 
-## 5. Current state (end of day 4)
+## 5. Current state (end of day 4, checked 2026-11-04)
 
-Days 2, 3 and 4 are built and verified. Day 3 (check-in, visit, renewal, PT) was run in a browser as kasir and superadmin with a simulated scanner (typing the token + Enter). Day 4 (shop) was run in a browser as kasir and superadmin. The dev DB was wiped and reseeded on 2026-10-28 because it predated day 1; days 3 and 4 added tables with `npm run db:push`.
+Days 2, 3 and 4 are built and verified. Day 5 (Dashboard, Laporan, Pengaturan Akun) is not started: those three pages still render `PlaceholderPage`. `npm test` runs 114 tests in 6 files, all passing. Day 3 (check-in, visit, renewal, PT) was run in a browser as kasir and superadmin with a simulated scanner (typing the token + Enter). Day 4 (shop) was run in a browser as kasir and superadmin. The dev DB was wiped and reseeded on 2026-10-28 because it predated day 1; days 3 and 4 added tables with `npm run db:push`.
 
 **Done**
 - Day 1 (foundation): roles, `requireRole()`, sidebar menus per role, 13 pages, dark navy/orange theme, seed accounts `superadmin@mastergym.test` / `kasir@mastergym.test` (password `password123`, dev only).
@@ -132,18 +132,20 @@ Days 2, 3 and 4 are built and verified. Day 3 (check-in, visit, renewal, PT) was
   - Invoice numbers can skip after a failed save (the sequence isn't rolled back).
   - Cancelling a sale of a since-deactivated product restores its stock to the hidden product.
 - Impossible dates such as `2026-02-31` in the URL roll over to the next month.
+- The member PDF uses jsPDF's built-in Helvetica, which only renders Latin-1 names (shortcut in `member-pdf.ts`; embed a font if non-Latin names appear).
+- The Dockerfile uses `node:20-alpine`. Node 20 reached end-of-life in April 2026; move to Node 22 or 24 before launch (and re-check which npm the image ships, see the lockfile note above).
 - No pagination in Data Member, Visitor list or attendance (shortcut; add it if lists get long).
 - Orphan photo files are kept when a member's photo is replaced (shortcut).
 - The real logo and colours are pending (send the logo → update `app/globals.css` and the "M" badge in `components/app-sidebar.tsx`).
-- `docs/superpowers/specs/2026-10-17-foundation-design.md` is outdated (it describes the old single-account version).
-- `package-lock.json` must be regenerated with npm 10 (the Docker image's npm): a lock written by npm 11 made `npm ci` fail in Docker (missing optional `esbuild` entries). If it happens again: `docker run --rm -v "$PWD":/w -w /w node:20-alpine npm install --package-lock-only --ignore-scripts`.
+- `docs/superpowers/specs/2026-10-17-foundation-design.md` describes the old single-account version. It's marked **Superseded** and kept for history. The day 2–4 specs and plans are also history: where they disagree with these docs, these docs win.
+- `package-lock.json` must be regenerated with npm 10 (the Docker image's npm): a lock written by npm 11 made `npm ci` fail in Docker (missing optional `esbuild` entries). The Mac has Homebrew Node 26, which ships npm 11, so pin npm with `npm install -g npm@10` (a `brew upgrade node` can undo it; check `npm -v`). If the lockfile shows hundreds of deleted `@esbuild/*` lines in `git diff`, restore it with `git checkout package-lock.json`. If it happens again: `docker run --rm -v "$PWD":/w -w /w node:20-alpine npm install --package-lock-only --ignore-scripts`.
 - Dev note: `next dev` (Turbopack) sometimes keeps a stale module after new server exports/actions are added. Symptom: `… is not a function` or `Cannot read properties of undefined (reading 'apply')`. Restart `npm run dev`.
 
 ## 6. Set up on a new PC
 
-1. Install **Node 20+**, **PostgreSQL 16** (same major version as Sembako) and optionally **Docker Desktop**.
-   - Docker Desktop on Windows needs WSL2. If it hangs on "Starting the Docker Engine", quit it fully, run `wsl --shutdown`, and start it again.
-   - Docker Desktop doesn't start with Windows; open it before running `docker compose`.
+1. Install **Node 20+** with **npm 10** (`npm install -g npm@10` if `npm -v` says 11, see section 5), **PostgreSQL 16** (same major version as Sembako) and optionally **Docker Desktop**. On macOS, Homebrew works for Node (`brew install node`) and Docker Desktop.
+   - Windows only: Docker Desktop needs WSL2. If it hangs on "Starting the Docker Engine", quit it fully, run `wsl --shutdown`, and start it again.
+   - Docker Desktop may not start on login; open it before running `docker compose`.
 2. Get the code, check out the working branch, then run `npm ci`.
 3. `cp .env.example .env`, then fill `SESSION_SECRET` and `NEXT_SERVER_ACTIONS_ENCRYPTION_KEY` (`openssl rand -base64 32` each).
 4. Database. Choose one:
@@ -154,7 +156,7 @@ Days 2, 3 and 4 are built and verified. Day 3 (check-in, visit, renewal, PT) was
 
 ## 7. Day 2: member registration (done, kept for reference)
 
-Build order for the remaining days: **day 2** members → **day 3** check-in, attendance, renewal, visit, PT add-on → **day 4** inventory, sales, purchases, expenses (copied from Sembako) → **day 5** dashboards and reports, then testing with the real scanner. Each day has its own section below (scope, questions to ask first, and when it counts as done). The deadline is end of October, so scope may need cutting. Ask the user.
+Build order for the remaining days: **day 2** members → **day 3** check-in, attendance, renewal, visit, PT add-on → **day 4** inventory, sales, purchases, expenses (copied from Sembako) → **day 5** dashboards and reports, then testing with the real scanner. Each day has its own section below (scope, questions to ask first, and when it counts as done). The deadline was pushed back on 2026-10-28 (section 1), so the full plan is kept; ask the user before cutting scope.
 
 **How to work each day:** ask that day's open questions first (rule 3) → build in `features/<domain>/` following Sembako → run `npm run lint` and `npm run build` → test in the browser as the right role → update this file's "Current state" and the other docs → tell the user it's ready to commit (never commit yourself).
 
