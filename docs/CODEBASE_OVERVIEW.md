@@ -2,7 +2,7 @@
 
 [Back to README](../README.md) · Related docs: [AUTH](./AUTH.md) · [DATABASE](./DATABASE.md) · [UI](./UI.md) · [DOCKER](./DOCKER.md) · [HANDOFF](./HANDOFF.md)
 
-This document explains **what every part of the code does, where it lives, and how a request flows through it**. It describes the code as of the end of day 4 (2026-10-30): login, roles, layout, member registration (packages, wizard, PDF card, Data Member), check-in, visits, renewals, PT add-ons, the shop (inventory, sales, purchases, expenses) and placeholder pages for the rest (Dashboard, Laporan, Pengaturan Akun). Update it when a feature lands.
+This document explains **what every part of the code does, where it lives, and how a request flows through it**. It describes the code as of the end of day 5 (2026-11-04): login, roles, layout, member registration (packages, wizard, PDF card, Data Member), check-in, visits, renewals, PT add-ons, the shop (inventory, sales, purchases, expenses), the dashboards, Laporan and Pengaturan Akun. Every menu page is built. Update it when a feature lands.
 
 ---
 
@@ -58,11 +58,12 @@ master-gym/
 │   ├── authentication/       login page, login/logout Server Actions, Zod schema
 │   ├── membership/           packages, registration, PDF card, Data Member, check-in, visits, renewal, PT (days 2–3)
 │   ├── shop/                 products, stock ledger, sales, purchases, histories (day 4)
-│   └── expenses/             expenses and expense categories (day 4)
+│   ├── expenses/             expenses and expense categories (day 4)
+│   ├── reports/              Dashboard, Home, Laporan, opening balance, report maths (day 5)
+│   └── administration/       Pengaturan Akun: change password (day 5)
 ├── components/
 │   ├── app-sidebar.tsx       The logged-in sidebar (menu per role, user box, logout)
-│   ├── period-filter.tsx     Period dropdown + custom dates for the history pages (URL params)
-│   ├── placeholder-page.tsx  "Halaman ini belum tersedia" page used by every unbuilt menu
+│   ├── period-filter.tsx     Period dropdown + custom dates for the history pages, Dashboard, Home and Laporan (URL params)
 │   └── ui/                   shadcn/Base UI kit + a few house components (see UI.md)
 ├── hooks/
 │   ├── use-mobile.ts         true below 768px wide (drives the mobile sidebar)
@@ -103,7 +104,7 @@ master-gym/
 |---|---|---|---|
 | `/` | `app/page.tsx` | anyone | Redirects to `/dashboard` (which redirects to `/login` if logged out) |
 | `/login` | `app/login/page.tsx` → `features/authentication/login-page.tsx` | logged out | Email + password form |
-| `/dashboard` | `app/(app)/dashboard/page.tsx` | both | Placeholder titled "Dashboard" (kasir) or "Home" (superadmin) |
+| `/dashboard` | `app/(app)/dashboard/page.tsx` | both | Kasir: Dashboard (period filter, Jumlah Transaksi, Omzet, low stock, recent transactions). Superadmin: Home (profit, bank and cash balances, tiles, four tables, Edit Keuangan) |
 | `/membership/check-in` | `app/(app)/membership/check-in/page.tsx` | kasir | Absen: scan/phone input, member pop-up (locker, PT + trainer), today's attendance |
 | `/membership/attendance` | `.../membership/attendance/page.tsx` | kasir | Riwayat Absen: members and visitors for one date (`?date=YYYY-MM-DD`) |
 | `/membership/members` | `.../membership/members/page.tsx` | kasir | Data Member: search, status filter incl. Visitor, Total Kehadiran, Detail, Edit and PDF buttons |
@@ -116,19 +117,19 @@ master-gym/
 | `/purchases/new` | `app/(app)/purchases/new/page.tsx` | kasir | Tambah Pembelian: 4-step wizard, Kelola Supplier |
 | `/purchases/history` | `app/(app)/purchases/history/page.tsx` | both | Riwayat Pembelian: one row per item, `?period=&from=&to=`, Detail; Batalkan for the superadmin only |
 | `/expenses` | `app/(app)/expenses/page.tsx` | both | Pengeluaran: kasir form + history; superadmin history, Hapus and Kelola Kategori |
-| `/reports` | `app/(app)/reports/page.tsx` | superadmin | Placeholder "Laporan" |
-| `/administration/account-settings` | `.../administration/account-settings/page.tsx` | superadmin | Placeholder "Pengaturan Akun" |
+| `/reports` | `app/(app)/reports/page.tsx` | superadmin | Laporan: `?period=&from=&to=&method=all\|cash\|bank`, tiles, Laba per Produk, Detail Penjualan |
+| `/administration/account-settings` | `.../administration/account-settings/page.tsx` | superadmin | Pengaturan Akun: change the kasir's or own password |
 
 Every role-restricted page looks like this:
 
 ```tsx
 export default async function Page() {
   await requireRole("kasir");            // wrong role → redirect("/dashboard")
-  return <PlaceholderPage title="Absen" />;
+  return <CheckInPage />;                // imported from features/membership/...
 }
 ```
 
-When a feature is built, the placeholder line is replaced by the real page, for example `return <CheckInPage />` imported from `features/membership/...`. The `requireRole` line stays.
+The `requireRole` line stays at the top of every restricted page.
 
 ---
 
@@ -201,7 +202,11 @@ Future feature actions follow the same steps, in Sembako's order: `requireRole(.
 | `app/page.tsx` | `redirect("/dashboard")`. |
 | `app/login/page.tsx` | One line: re-exports the login page from `features/authentication`. |
 | `app/(app)/layout.tsx` | The logged-in shell: session check, user lookup, sidebar, header bar (sidebar toggle + "Master Gym"), and `<main>` with padding. |
+<<<<<<< Updated upstream
 | `app/(app)/**/page.tsx` | The 13 pages listed in section 3. Members and payment fetch data and render `features/membership/*`; the rest are placeholders. |
+=======
+| `app/(app)/**/page.tsx` | The 14 logged-in pages listed in section 3. Each calls `requireRole` (or `verifySession` for the shared dashboard), loads data from `features/*/queries.ts` and renders a `features/*` page. All pages are built. |
+>>>>>>> Stashed changes
 | `app/api/uploads/[...path]/route.ts` | `GET`: `requireRole("kasir")`, then `readUpload()`; content type from the file extension, `private` cache for a day; 404 for an unknown extension, a missing file or a path outside `UPLOADS_DIR`. |
 
 ### `features/authentication/`
@@ -236,6 +241,30 @@ Future feature actions follow the same steps, in Sembako's order: `requireRole(.
 | `member-detail-dialog.tsx` | Detail pop-up: PT balance + check-in history. |
 | `*.test.ts` | Vitest unit tests for `logic.ts` and `validation.ts`. |
 
+Day 5 changes here: `checkOutAction` (kasir; sets `checked_out_at` for a member check-in or visit of today, only if still empty) with `CheckOutSchema`, and a "Jam Keluar" column plus a Logout button per row in `attendance-table.tsx` (the button is hidden on Home and in Riwayat Absen).
+
+### `features/reports/` (day 5)
+
+| File | What it does |
+|---|---|
+| `logic.ts` | Pure functions (tested): the `Movement` list type, `methodOf` (QRIS/Transfer/Debit → bank), `splitWhole` / `saleCostShares` (whole-rupiah split of cost of goods), `inRange`, `byMethod`, `omzet`, `omzetByKind`, `costOfGoods`, `expensesTotal`, `netProfit`, `goodsProfit`, `profitPercent`, `transactionCount`, `balances` (opening + movements since `as_of`), `recentTransactions`, `productProfit`. |
+| `queries.ts` | Server-only. `listMovements()` builds one list of money movements (payments of sales, purchases, memberships, visits and PT, plus expenses, with sale cost of goods), `listSaleLines()`, `getOpeningBalance()`. Aggregates in memory (marked `// shortcut:`). |
+| `validation.ts` | `OpeningBalanceSchema` (date, cash, bank; whole rupiah ≥ 0). |
+| `actions.ts` | `"use server"`. Superadmin: `saveOpeningBalanceAction` (insert once; a second save answers "Saldo awal sudah diisi."). |
+| `kasir-dashboard-page.tsx`, `home-page.tsx`, `reports-page.tsx` | The three pages. `app/(app)/dashboard/page.tsx` and `app/(app)/reports/page.tsx` compute the numbers with `logic.ts` and pass them in. |
+| `stat-tile.tsx`, `dashboard-card.tsx`, `method-filter.tsx` | Number tile, table panel shell, and the Semua/Cash/Bank dropdown (`?method=`). |
+| `low-stock-table.tsx`, `recent-transactions-table.tsx`, `expiring-members-table.tsx`, `product-profit-table.tsx`, `sales-detail-table.tsx` | The tables on those pages. |
+| `opening-balance-dialog.tsx` | Edit Keuangan pop-up (date, Cash, Bank). |
+| `*.test.ts` | Vitest tests for `logic.ts` and `validation.ts`. |
+
+### `features/administration/` (day 5)
+
+| File | What it does |
+|---|---|
+| `account-settings-page.tsx` | Pengaturan Akun: two cards, "Password Kasir" and "Password Saya", each with current password and new password twice. |
+| `actions.ts` | `"use server"`. Superadmin: `changePasswordAction` checks the superadmin's own current password, then hashes and saves the new one for the chosen account. |
+| `validation.ts`, `validation.test.ts` | `ChangePasswordSchema` (new password ≥ 8 characters, both must match) and its tests. |
+
 ### `features/shop/`
 
 | File | What it does |
@@ -264,7 +293,6 @@ Future feature actions follow the same steps, in Sembako's order: `requireRole(.
 | File | What it does |
 |---|---|
 | `app-sidebar.tsx` | Client component. Props: `name`, `email`, `role`. Header: orange "M" badge, "Master Gym", and the role label ("Kasir" / "Super Admin"). Body: `navForRole(role)` rendered as labelled groups of links; the link whose `href` equals the current path is highlighted. Footer: user initials, name, email, and a "Keluar" button that submits `logoutAction`. `collapsible="icon"` lets desktop users shrink it to icons. |
-| `placeholder-page.tsx` | Shows a page title and an `EmptyState` ("Halaman ini belum tersedia"). Delete it once every page is built. |
 | `ui/*` | The UI kit. See [UI.md](./UI.md) for the full list. |
 
 ### `hooks/`
@@ -335,7 +363,7 @@ Defined in `.env` (local, gitignored; copy from `.env.example`).
 | Change colours | `app/globals.css` (`:root` block) |
 | Change the logo badge / app name in the sidebar | `components/app-sidebar.tsx` |
 | Add, rename or reorder a menu item | `lib/nav.ts`, then create the page under `app/(app)/…` with `requireRole` |
-| Build a placeholder page for real | Create `features/<domain>/<name>-page.tsx`, render it from the route file |
+| Add a new page | Create `features/<domain>/<name>-page.tsx`, render it from the route file |
 | Add a table or column | `lib/db/schema.ts`, then `npm run db:push` |
 | Change login behaviour | `features/authentication/actions.ts` |
 | Change who can open a page | The `requireRole(...)` call in that page |

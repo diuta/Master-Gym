@@ -11,7 +11,7 @@ There are two roles, defined once in `lib/db/schema.ts` as the Postgres enum `ro
 | `kasir` | The front-desk cashier. **One shared account.** | Dashboard, Membership (Absen, Riwayat Absen, Data Member, Pembayaran), Inventori, Tambah/Riwayat Penjualan, Tambah/Riwayat Pembelian, Pengeluaran |
 | `superadmin` | The owner/manager. One account. | Home, Laporan, Pengaturan Harga, Riwayat Penjualan, Riwayat Pembelian, Pengeluaran, Pengaturan Akun |
 
-The roles mostly don't overlap: the superadmin does **not** get the cashier's daily-operation pages (the spec says the admin doesn't check members in), and the cashier can't see reports. The exceptions are the history pages Riwayat Penjualan, Riwayat Pembelian and Pengeluaran, which both roles open. On them, **cancelling a sale or purchase, deleting an expense, and managing expense categories are superadmin-only** (the actions call `requireRole("superadmin")`; the kasir doesn't see the buttons). Everything else on those pages (adding sales, purchases and expenses) is kasir-only. Both share `/dashboard`, which will show different content per role.
+The roles mostly don't overlap: the superadmin does **not** get the cashier's daily-operation pages (the spec says the admin doesn't check members in), and the cashier can't see reports. The exceptions are the history pages Riwayat Penjualan, Riwayat Pembelian and Pengeluaran, which both roles open. On them, **cancelling a sale or purchase, deleting an expense, and managing expense categories are superadmin-only** (the actions call `requireRole("superadmin")`; the kasir doesn't see the buttons). Everything else on those pages (adding sales, purchases and expenses) is kasir-only. Both share `/dashboard`, which shows different content per role (kasir Dashboard, superadmin Home). Reports and Pengaturan Akun are superadmin-only.
 
 The TypeScript type `Role = "superadmin" | "kasir"` lives in `lib/auth/session.ts`. If a role is ever added, change the enum in `schema.ts`, the `Role` type, `navForRole` in `lib/nav.ts`, and run `npm run db:push`.
 
@@ -22,7 +22,7 @@ The TypeScript type `Role = "superadmin" | "kasir"` lives in `lib/auth/session.t
   ```bash
   npm run db:create-user -- --name="Kasir" --email=kasir@contoh.id --password=... --role=kasir
   ```
-- **Changing a password:** there is no screen for it yet (planned under Pengaturan Akun). For now, update the row with a new bcrypt hash, or delete the user and create it again.
+- **Changing a password:** the superadmin uses Pengaturan Akun (`/administration/account-settings`) to change the kasir's password or their own. It needs the superadmin's own current password every time, and the new password must be at least 8 characters. Other open sessions stay logged in (see section 6).
 
 ## 2. Logging in, step by step
 

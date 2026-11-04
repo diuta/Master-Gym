@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
-  CheckInSchema, PtProgramSchema, PtPurchaseSchema, RegisterMemberSchema, RenewMemberSchema,
+  CheckInSchema, CheckOutSchema, PtProgramSchema, PtPurchaseSchema, RegisterMemberSchema, RenewMemberSchema,
   VisitSchema,
 } from "./validation";
 import { todayWib } from "./logic";
@@ -54,6 +54,18 @@ describe("CheckInSchema", () => {
   });
   it("turns a blank locker into null", () => {
     expect(CheckInSchema.parse({ ...base, lockerNo: "  " }).lockerNo).toBeNull();
+  });
+});
+
+describe("CheckOutSchema", () => {
+  it("rejects id 0", () => {
+    expect(CheckOutSchema.safeParse({ kind: "member", id: 0 }).success).toBe(false);
+  });
+  it("rejects an unknown kind", () => {
+    expect(CheckOutSchema.safeParse({ kind: "x", id: 1 }).success).toBe(false);
+  });
+  it("accepts a visitor", () => {
+    expect(CheckOutSchema.safeParse({ kind: "visitor", id: 3 }).success).toBe(true);
   });
 });
 

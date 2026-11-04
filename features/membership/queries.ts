@@ -234,7 +234,9 @@ export async function listAttendance(date: string): Promise<AttendanceRow[]> {
   const [memberRows, visitRows] = await Promise.all([
     db
       .select({
+        id: checkIns.id,
         at: checkIns.checkedInAt,
+        checkedOutAt: checkIns.checkedOutAt,
         name: members.name,
         memberNo: members.memberNo,
         lockerNo: checkIns.lockerNo,
@@ -245,7 +247,13 @@ export async function listAttendance(date: string): Promise<AttendanceRow[]> {
       .leftJoin(trainers, eq(trainers.id, checkIns.trainerId))
       .where(and(gte(checkIns.checkedInAt, start), lt(checkIns.checkedInAt, end))),
     db
-      .select({ at: visits.createdAt, name: visits.name, lockerNo: visits.lockerNo })
+      .select({
+        id: visits.id,
+        at: visits.createdAt,
+        checkedOutAt: visits.checkedOutAt,
+        name: visits.name,
+        lockerNo: visits.lockerNo,
+      })
       .from(visits)
       .where(and(gte(visits.createdAt, start), lt(visits.createdAt, end))),
   ]);

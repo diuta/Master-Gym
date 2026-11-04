@@ -1,7 +1,7 @@
 "use server";
 
 import { randomBytes } from "crypto";
-import { and, desc, eq, ne, sql } from "drizzle-orm";
+import { and, desc, eq, gte, isNull, ne, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { db } from "@/lib/db";
 import {
@@ -25,6 +25,7 @@ import {
   membershipPrice,
   renewalStartDate,
   todayWib,
+  wibDayRange,
 } from "./logic";
 import {
   findMemberSummary,
@@ -38,6 +39,8 @@ import {
   CategoryPricesSchema,
   CheckInSchema,
   type CheckInInput,
+  CheckOutSchema,
+  type CheckOutInput,
   type MemberSummary,
   type CategoryPricesInput,
   PackageSchema,
@@ -481,6 +484,36 @@ export async function checkInAction(input: CheckInInput): Promise<ActionResult> 
     revalidatePath("/membership/members");
   }
   return result;
+}
+
+// Only today's rows can be logged out; the IS NULL guard keeps a double click from
+// overwriting the first time, and a zero-row update is still a success.
+export async function checkOutAction(input: CheckOutInput): Promise<ActionResult> {
+  await requireRole("kasir");
+  const v = CheckOutSchema.safeParse(input);
+  if (!v.success) return { errors: v.error.flatten().fieldErrors };
+  const { kind, id } = v.data;
+  const { start } = wibDayRange(todayWib());
+  const now = new Date();
+
+  if (kind === "member") {
+    await db
+      .update(checkIns)
+      .set({ checkedOutAt: now })
+      .where(
+        and(eq(checkIns.id, id), isNull(checkIns.checkedOutAt), gte(checkIns.checkedInAt, start)),
+      );
+  } else {
+    await db
+      .update(visits)
+      .set({ checkedOutAt: now })
+      .where(and(eq(visits.id, id), isNull(visits.checkedOutAt), gte(visits.createdAt, start)));
+  }
+
+  revalidatePath("/membership/check-in");
+  revalidatePath("/membership/attendance");
+  revalidatePath("/dashboard");
+  return { success: true, data: undefined };
 }
 
 export async function createVisitAction(input: VisitInput): Promise<ActionResult> {

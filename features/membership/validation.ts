@@ -132,6 +132,12 @@ export const CheckInSchema = z
   });
 export type CheckInInput = z.input<typeof CheckInSchema>;
 
+export const CheckOutSchema = z.object({
+  kind: z.enum(["member", "visitor"]),
+  id: z.number().int().positive(),
+});
+export type CheckOutInput = z.input<typeof CheckOutSchema>;
+
 export const VisitSchema = z
   .object({ name, phone, lockerNo, price: price("Harga"), payments })
   .superRefine(checkPayments);
@@ -191,7 +197,9 @@ export type MemberSummary = {
 
 export type AttendanceRow = {
   kind: "member" | "visitor";
+  id: number;
   at: Date;
+  checkedOutAt: Date | null;
   name: string;
   memberNo: string | null;
   lockerNo: string | null;

@@ -101,6 +101,19 @@ export const visitPrice = pgTable(
   (t) => [check("visit_price_single_row", sql`${t.id} = 1`)],
 );
 
+// One row only (id = 1): cash/bank on hand as of asOf; reports add movements from that date on.
+export const openingBalance = pgTable(
+  "opening_balance",
+  {
+    id: integer("id").primaryKey().default(1),
+    cash: decimal("cash", { precision: 14, scale: 2 }).notNull(),
+    bank: decimal("bank", { precision: 14, scale: 2 }).notNull(),
+    asOf: date("as_of", { mode: "string" }).notNull(),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (t) => [check("opening_balance_single_row", sql`${t.id} = 1`)],
+);
+
 export const trainers = pgTable("trainers", {
   id: bigserial("id", { mode: "number" }).primaryKey(),
   name: varchar("name", { length: 100 }).notNull(),
@@ -145,6 +158,7 @@ export const visits = pgTable(
     price: decimal("price", { precision: 14, scale: 2 }).notNull(),
     lockerNo: varchar("locker_no", { length: 20 }),
     createdAt: timestamp("created_at").notNull().defaultNow(),
+    checkedOutAt: timestamp("checked_out_at"),
   },
   (t) => [index("visits_created_at_idx").on(t.createdAt)],
 );
@@ -160,6 +174,7 @@ export const checkIns = pgTable(
     // Set when the member used a PT session on this visit.
     trainerId: bigint("trainer_id", { mode: "number" }).references(() => trainers.id),
     checkedInAt: timestamp("checked_in_at").notNull().defaultNow(),
+    checkedOutAt: timestamp("checked_out_at"),
   },
   (t) => [
     index("check_ins_checked_in_at_idx").on(t.checkedInAt),

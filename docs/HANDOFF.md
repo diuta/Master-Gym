@@ -96,10 +96,25 @@ A one-page **PDF** with QR code, name, member ID, phone, expiry date and photo. 
 | Dates on sale/purchase/expense | Editable, default today WIB, no future dates |
 | Initial stock | Can be entered when adding a product (writes an `initial` movement), so existing stock loads at launch |
 | Expired members | Blocked from check-in: the pop-up shows "Expired", Check-In is disabled (also refused on the server), and **Perpanjang** opens the renewal form with that member selected |
+| Edit Keuangan (day 5) | Opening balances: the superadmin enters starting Cash and Bank **and the date they are valid for**, once. After saving it is locked. Only movements dated on or after that date count toward the running balances |
+| Total Laba (Home) | All income − all costs: (sales + membership + visit + PT) − cost of goods sold − expenses. Same number as Untung Bersih on Laporan |
+| Uang di Bank / Uang Tunai (Home) | Running balance: opening balance + all money in − all money out since the opening date. **Ignores the period filter**; Bank = QRIS + Transfer + Debit |
+| Total Modal (Laporan) | Cost of goods sold in the period (`sale_items.qty × unit_cost` of non-cancelled sales), not money spent on stock |
+| Jumlah Transaksi | Every paid document: sales, memberships (new and renewal), visits and PT purchases. Not purchases or expenses; cancelled sales don't count |
+| Cash/Bank filter | A split-paid document counts toward each method by its own payment amount; a sale's cost of goods is split in the same ratio in whole rupiah, so Cash + Bank = Semua exactly |
+| Check-out | A Logout button per row of today's Absen list records `checked_out_at`; Jam Keluar shows in Absen, Riwayat Absen and Home. Works for visitors too; a second click does nothing |
+| Pengaturan Akun | Password only: the superadmin changes the kasir's or their own password, and must type their own current password |
+| Day 5 defaults | Home and Dashboard default to Hari Ini, Laporan to Bulan Ini; Total Pengeluaran is the `expenses` table only; Member Aktif counts members whose latest membership is active or expiring (≤ 7 days left), as of today; recent transactions show the last 10 |
 
+<<<<<<< Updated upstream
 ## 5. Current state (end of day 4)
 
 Days 2, 3 and 4 are built and verified. Day 3 (check-in, visit, renewal, PT) was run in a browser as kasir and superadmin with a simulated scanner (typing the token + Enter). Day 4 (shop) was run in a browser as kasir and superadmin. The dev DB was wiped and reseeded on 2026-10-28 because it predated day 1; days 3 and 4 added tables with `npm run db:push`.
+=======
+## 5. Current state (end of day 5, checked 2026-11-04)
+
+Days 2, 3, 4 and 5 are built. Day 5 was run in a browser on 2026-11-04 against a `[TEST]` fixture: Kasir Dashboard, Superadmin Home with Edit Keuangan, Laporan with the period and Cash/Bank filters, Pengaturan Akun, and check-out on Absen. `npm test` runs 147 tests in 9 files, all passing. Day 3 (check-in, visit, renewal, PT) was run in a browser as kasir and superadmin with a simulated scanner (typing the token + Enter). Day 4 (shop) was run in a browser as kasir and superadmin. The dev DB was wiped and reseeded on 2026-10-28 because it predated day 1; days 3, 4 and 5 added tables and columns with `npm run db:push`.
+>>>>>>> Stashed changes
 
 **Done**
 - Day 1 (foundation): roles, `requireRole()`, sidebar menus per role, 13 pages, dark navy/orange theme, seed accounts `superadmin@mastergym.test` / `kasir@mastergym.test` (password `password123`, dev only).
@@ -116,12 +131,25 @@ Days 2, 3 and 4 are built and verified. Day 3 (check-in, visit, renewal, PT) was
   - **Riwayat Penjualan** / **Riwayat Pembelian** (kasir + superadmin): period filter (sales also by product), Detail pop-up; only the superadmin can Batalkan.
   - **Pengeluaran** (kasir adds; superadmin sees the history, deletes, and manages categories).
   - Stock is the sum of `stock_movements`, never stored; 10 new tables, see [DATABASE.md](./DATABASE.md).
+- Day 5 (dashboards and reports), code in `features/reports/` and `features/administration/`:
+  - **Dashboard** (kasir): period filter (default Hari Ini), Jumlah Transaksi, Omzet, Stok Menipis/Habis, Transaksi Terbaru.
+  - **Home** (superadmin): period filter plus Total Laba, Uang di Bank, Uang Tunai, Total Pengeluaran, product and member tiles, Stok Menipis/Habis, Transaksi Terbaru, Absensi Hari Ini (with Jam Keluar) and Reminder Member (expiring in ≤ 7 days). **Edit Keuangan** saves the opening balance once.
+  - **Laporan** (superadmin): period + Cash/Bank/Semua filter that recalculates every tile; Laba per Produk and Detail Penjualan tables.
+  - **Pengaturan Akun** (superadmin): change the kasir's or own password (current password required).
+  - **Check-out:** Logout per row on Absen; Jam Keluar on Absen, Riwayat Absen and Home.
+  - All the maths is pure, tested functions in `features/reports/logic.ts`; one shared list of money movements feeds every number.
 
 **Not done / known gaps**
-- The real USB scanner was tested by the user on 2026-10-30 and works. The real webcam is still untested on the front-desk PC.
+- The real USB scanner was tested by the user on 2026-10-30 and works. Still untested in the real world: the webcam on the front-desk PC, and Home and Laporan on a phone.
 - The webcam needs HTTPS if the app is opened over the LAN (`localhost` is fine).
 - No cancel/refund for visits, renewals or PT purchases.
 - Riwayat Absen shows one date at a time.
+- **Day 5 gaps:**
+  - The opening balance has no in-app fix: a wrong value after saving needs a DB edit (`opening_balance`, single row).
+  - Reports load every money movement and aggregate in memory, linear in row count (`// shortcut:` in `features/reports/queries.ts`); move the sums into SQL if the data grows to hundreds of thousands of rows.
+  - Changing a password does not log out other sessions (stateless JWT, see [AUTH.md](./AUTH.md)).
+  - Check-out only works for today's rows.
+  - Transaksi Terbaru orders by save time (`paid_at`), so a backdated sale appears by when it was entered, not by its date.
 - **Day 4 gaps:**
   - No stock correction (stok opname).
   - No invoice print or PDF.
@@ -215,26 +243,19 @@ Keep:
 
 **Day 4 is done when:** a product can be added, bought in (stock up), sold (stock down) and cancelled (stock restored), with split payments recorded; low/empty stock shows; expenses can be added.
 
-## 10. Day 5: dashboards, reports, account settings, real-world test
+## 10. Day 5: dashboards, reports, account settings, real-world test (built 2026-11-04)
 
-Pages: `/dashboard` (different content per role), `/reports`, `/administration/account-settings`. Detail in section 3 (Kasir → Dashboard, Superadmin → Home, Laporan).
+Pages: `/dashboard` (different content per role), `/reports`, `/administration/account-settings`. Detail in section 3 (Kasir → Dashboard, Superadmin → Home, Laporan). The decisions are in section 4; the full design is in `docs/superpowers/specs/2026-11-04-day5-dashboards-reports-design.md` (history).
 
 **Scope**
-1. **Kasir dashboard:** period filter; transaction count and revenue; low/empty stock table; recent transactions.
-2. **Superadmin Home:** period filter; profit, money in the bank, cash, expenses; total products, stock value, profit on goods sold, active/remaining members, transaction count; tables: low stock, recent transactions, today's attendance, members expiring in ≤ 7 days. **"Edit Keuangan"**: only active at launch; meaning still to be confirmed (see questions).
-3. **Laporan:** period filter + payment-method filter (all / cash / bank) that recalculates **everything**; revenue = sales + membership + visit + add-on; total cost, net profit, profit %, expenses (this period and all time); profit per product table; sales detail table.
-4. **Pengaturan Akun:** superadmin changes the kasir's and their own password.
-5. **Real-world test** at the front desk: the actual scanner, the actual PC screen, a phone for the superadmin.
+1. [done] **Kasir dashboard:** period filter; transaction count and revenue; low/empty stock table; recent transactions.
+2. [done] **Superadmin Home:** period filter; profit, money in the bank, cash, expenses; total products, stock value, profit on goods sold, active/remaining members, transaction count; tables: low stock, recent transactions, today's attendance, members expiring in ≤ 7 days. **Edit Keuangan**: opening balance as of a date, saved once.
+3. [done] **Laporan:** period filter + payment-method filter (all / cash / bank) that recalculates everything; profit per product table; sales detail table.
+4. [done] **Pengaturan Akun:** superadmin changes the kasir's or their own password.
+5. [done] **Check-out** (added in the day 5 talk): Logout per row on Absen, Jam Keluar shown.
+6. [not done] **Real-world test** at the front desk. The real scanner was already tested on 2026-10-30. Still to do: the webcam on the desk PC, and Home and Laporan on a phone.
 
-Reuse Sembako's `features/dashboard/dashboard-page.tsx` and `laporan-page.tsx` and its period filter (`lib/date.ts` `computeDateRange`, `PERIODE_OPTIONS`).
-
-**Ask before starting day 5**
-1. What exactly is "Edit Keuangan"? (Probably entering opening cash/bank balances once at launch.) When is it switched off?
-2. Does "Total Laba" on Home include membership income, or only product profit?
-3. Is "Uang di Bank" cumulative since launch, or for the selected period?
-4. Which timezone? Presumably WIB (Asia/Jakarta) for "today" and periods.
-
-**Day 5 is done when:** every number on Home and Laporan can be checked by hand against a few test transactions, and the cash/bank filter changes them correctly.
+**Day 5 is done when:** every number on Home and Laporan can be checked by hand against a few test transactions, and the cash/bank filter changes them correctly. This was checked in the browser on 2026-11-04 against a `[TEST]` fixture (Cash + Bank = Semua exactly); only the real-world test remains.
 
 ## 11. After day 5 (not scheduled)
 

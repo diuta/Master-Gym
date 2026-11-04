@@ -117,10 +117,25 @@ Check `payments_exactly_one_link`: `num_nonnulls(membership_id, visit_id, pt_pur
 | `trainers` | `id`, `name`, `phone`, `is_active`, `created_at`, `updated_at` | Managed by the superadmin; deleting a trainer used in a check-in only deactivates it (same for a PT program with purchases) |
 | `pt_programs` | `id`, `name`, `sessions`, `price`, `is_active`, `created_at`, `updated_at` | "Per visit" = 1 session |
 | `pt_purchases` | `id`, `member_id` FK, `pt_program_id` FK, `program_name`, `sessions`, `price`, `created_at` | Name, sessions and price are **copied** from the program at purchase time |
-| `visits` | `id`, `name`, `phone`, `price`, `locker_no` nullable, `created_at` | A walk-in without membership. The row **is** the visitor check-in (`created_at` = check-in time). Index on `created_at` |
-| `check_ins` | `id`, `member_id` FK, `locker_no` nullable, `trainer_id` FK **nullable**, `checked_in_at` | One row per member check-in. `trainer_id` set = a PT session was used. Indexes on `checked_in_at` and `member_id` |
+| `visits` | `id`, `name`, `phone`, `price`, `locker_no` nullable, `created_at` | A walk-in without membership. The row **is** the visitor check-in (`created_at` = check-in time). Has `checked_out_at` (nullable, day 5). Index on `created_at` |
+| `check_ins` | `id`, `member_id` FK, `locker_no` nullable, `trainer_id` FK **nullable**, `checked_in_at`, `checked_out_at` nullable | One row per member check-in. `trainer_id` set = a PT session was used. Indexes on `checked_in_at` and `member_id` |
 
 **PT balance is computed, not stored:** sum of `pt_purchases.sessions` for the member minus the count of that member's `check_ins` with `trainer_id` not null. PT sessions never expire. Check-in locks the member row so the balance can't go below zero.
+
+**Check-out (day 5):** `check_ins.checked_out_at` and `visits.checked_out_at` are nullable timestamps (UTC wall-clock, like the others). `checkOutAction` sets one only if it is still null and the row is from today WIB.
+
+### Table `opening_balance` (day 5)
+
+Entered once by the superadmin in Home → Edit Keuangan.
+
+| Column | Type | Notes |
+|---|---|---|
+| `id` | `integer` PK default 1 | **Single row**: check `opening_balance_single_row` (`id = 1`); the save uses `ON CONFLICT DO NOTHING`, so it can only be saved once |
+| `cash`, `bank` | `decimal(14,2)` not null | Money on hand as of `as_of`. Bank covers QRIS, Transfer and Debit |
+| `as_of` | `date` not null | Only movements dated on or after this day count toward the running balances (Uang Tunai / Uang di Bank) |
+| `created_at` | `timestamp` not null, default now | |
+
+There is no in-app way to change it after saving; fix a wrong value with SQL in `db:studio` or `psql`.
 
 ### Day 4 tables (shop)
 
@@ -143,7 +158,7 @@ Enums `stock_movement_type` (`initial`, `purchase`, `sale`, `purchase_cancel`, `
 
 **`avg_cost` (moving average):** on a purchase, new avg = (old stock × old avg + qty × unit cost) ÷ (old stock + qty); if old stock ≤ 0, avg = unit cost. A sale copies the current avg into `sale_items.unit_cost` and leaves it unchanged; so does cancelling a sale. Cancelling a purchase reverses the average best-effort (exact only when no other stock change happened since); if the cancel empties stock, the average is kept (not reset to 0).
 
-**Which date reports use (plan for day 5 reports, not built yet):** each document's own date, not when it was saved. Sales, purchases and expenses use their `date` column (editable, no future dates); membership, visit and PT income use `payments.paid_at` converted to WIB. Rows with `status = cancelled` are excluded. Payments are money in when `sale_id` / `membership_id` / `visit_id` / `pt_purchase_id` is set and money out when `purchase_id` is set. Expenses have no `payments` rows: money out is purchases (via `payments.purchase_id`) plus the `expenses` table.
+**Which date reports use (built on day 5, `features/reports/queries.ts`):** each document's own date, not when it was saved. Sales, purchases and expenses use their `date` column (editable, no future dates); membership, visit and PT income use `payments.paid_at` converted to WIB. Rows with `status = cancelled` are excluded. Payments are money in when `sale_id` / `membership_id` / `visit_id` / `pt_purchase_id` is set and money out when `purchase_id` is set. Expenses have no `payments` rows: money out is purchases (via `payments.purchase_id`) plus the `expenses` table.
 
 **Deactivate, not delete:** deleting a product, product category, supplier or expense category that is referenced only sets `is_active = false`; unused ones are really deleted. A product with stock > 0 can't be deleted. Creating a name that matches an inactive row reactivates that row. Old documents keep the copied names.
 
