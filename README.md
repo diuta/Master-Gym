@@ -9,20 +9,58 @@ dan `superadmin` (laporan dan data master).
 - [docs/HANDOFF.md](docs/HANDOFF.md): konteks proyek, spec, keputusan, status, dan rencana per hari. **Baca ini dulu.**
 - [docs/CODEBASE_OVERVIEW.md](docs/CODEBASE_OVERVIEW.md): apa fungsi tiap file, route, alur request
 - [docs/AUTH.md](docs/AUTH.md) · [docs/DATABASE.md](docs/DATABASE.md) · [docs/UI.md](docs/UI.md) · [docs/DOCKER.md](docs/DOCKER.md)
+- `docs/superpowers/specs/` dan `docs/superpowers/plans/`: desain dan rencana per hari (arsip). Kalau bertentangan dengan dokumen di atas, dokumen di atas yang benar.
 
 ## Setup lokal
 
-```bash
-cp .env.example .env
-# isi SESSION_SECRET dan NEXT_SERVER_ACTIONS_ENCRYPTION_KEY:
-openssl rand -base64 32
+Butuh Node 20+ dan **npm 10** (npm yang sama dengan image Docker). npm 11 menulis
+`package-lock.json` tanpa entri opsional `@esbuild/*`, lalu `npm ci` di Docker gagal.
+Cek dengan `npm -v`; kalau 11, jalankan `npm install -g npm@10`.
 
-npm install
-# Postgres: PostgreSQL 16 lokal di port 5432 (ubah DATABASE_URL di .env),
-# atau Docker: docker compose up -d postgres (127.0.0.1:5434)
-npm run db:push
-npm run db:seed   # akun dev: superadmin@mastergym.test dan kasir@mastergym.test / password123
-npm run dev
+1. Salin file env:
+
+   ```bash
+   cp .env.example .env
+   ```
+
+2. Isi `SESSION_SECRET` dan `NEXT_SERVER_ACTIONS_ENCRYPTION_KEY` di `.env`, masing-masing dengan hasil perintah ini:
+
+   ```bash
+   openssl rand -base64 32
+   ```
+
+3. Install dependency:
+
+   ```bash
+   npm install
+   ```
+
+4. Siapkan Postgres. Pakai PostgreSQL 16 lokal di port 5432 (ubah `DATABASE_URL` di `.env`), atau Docker di `127.0.0.1:5434`:
+
+   ```bash
+   docker compose up -d postgres
+   ```
+
+5. Buat tabel, lalu isi akun dev (`superadmin@mastergym.test` dan `kasir@mastergym.test`, password `password123`) plus kategori pengeluaran awal:
+
+   ```bash
+   npm run db:push
+   ```
+
+   ```bash
+   npm run db:seed
+   ```
+
+6. Jalankan aplikasi:
+
+   ```bash
+   npm run dev
+   ```
+
+Unit test (vitest):
+
+```bash
+npm test
 ```
 
 Untuk server sungguhan, jangan pakai `db:seed`. Buat akun dengan:

@@ -20,7 +20,7 @@ This document explains **what every part of the code does, where it lives, and h
 | **shadcn/ui** (`base-nova` style) on **Base UI** | — | The UI kit. Component source lives in `components/ui/` and is ours to edit |
 | **lucide-react** | 1.45 | Icons |
 | **Zod** | 4 | Validating form input on the server |
-| **Vitest** | 4.1 | Unit tests (`npm test`) for the membership logic and validation |
+| **Vitest** | 4.1 | Unit tests (`npm test`) for the pure logic and Zod schemas of membership, shop and expenses, plus `lib/period.ts` |
 | **jspdf** + **qrcode** | — | The member PDF card (QR image + PDF), built in the browser |
 | **jose** | 6 | Signing and verifying the session cookie (JWT, HS256) |
 | **bcryptjs** | 3 | Hashing and checking passwords |
@@ -191,6 +191,7 @@ Future feature actions follow the same steps, in Sembako's order: `requireRole(.
 | `eslint.config.mjs` | `eslint-config-next` (core web vitals + TypeScript). Run with `npm run lint`. |
 | `tsconfig.json` | Strict mode; `@/*` maps to the project root (so `@/lib/db` = `./lib/db`). |
 | `AGENTS.md` | Auto-written by `next dev`: tells AI agents to read the bundled Next.js docs. Leave it. |
+| `.claude/launch.json` | Dev-server config for Claude Code's preview pane (`npm run dev` on port 3000). Not used by the app. |
 
 ### `app/`
 
@@ -201,7 +202,7 @@ Future feature actions follow the same steps, in Sembako's order: `requireRole(.
 | `app/page.tsx` | `redirect("/dashboard")`. |
 | `app/login/page.tsx` | One line: re-exports the login page from `features/authentication`. |
 | `app/(app)/layout.tsx` | The logged-in shell: session check, user lookup, sidebar, header bar (sidebar toggle + "Master Gym"), and `<main>` with padding. |
-| `app/(app)/**/page.tsx` | The 13 pages listed in section 3. Members and payment fetch data and render `features/membership/*`; the rest are placeholders. |
+| `app/(app)/**/page.tsx` | The 14 logged-in pages listed in section 3. Each calls `requireRole` (or `verifySession` for the shared dashboard), loads data from `features/*/queries.ts` and renders a `features/*` page. Only Dashboard, Laporan and Pengaturan Akun are still placeholders. |
 | `app/api/uploads/[...path]/route.ts` | `GET`: `requireRole("kasir")`, then `readUpload()`; content type from the file extension, `private` cache for a day; 404 for an unknown extension, a missing file or a path outside `UPLOADS_DIR`. |
 
 ### `features/authentication/`
@@ -272,7 +273,7 @@ Future feature actions follow the same steps, in Sembako's order: `requireRole(.
 | File | What it does |
 |---|---|
 | `use-mobile.ts` | `useIsMobile()` returns `true` when the window is narrower than 768px. Built on React's `useSyncExternalStore`: the server and the first browser render both say `false`, then React switches to the real value. This avoids the hydration-mismatch error the original version had (Sembako still has that bug). Used by `components/ui/sidebar.tsx`. |
-| `use-sort.ts` | `useSort(rows, getValue)` → `{ sortedRows, sort, toggleSort }`. Clicking a column cycles ascending → descending → off. Numbers compare as numbers, everything else with Indonesian locale ordering. Pairs with `components/ui/sortable-th.tsx`. Used by the Data Member table. |
+| `use-sort.ts` | `useSort(rows, getValue)` → `{ sortedRows, sort, toggleSort }`. Clicking a column cycles ascending → descending → off. Numbers compare as numbers, everything else with Indonesian locale ordering. Pairs with `components/ui/sortable-th.tsx`. Used by the Data Member and Inventori tables. |
 
 ### `lib/`
 
@@ -323,7 +324,7 @@ Defined in `.env` (local, gitignored; copy from `.env.example`).
 | `npm run db:push` | Makes the database match `lib/db/schema.ts` (creates/changes tables). |
 | `npm run db:generate` | Writes SQL migration files into `lib/db/migrations` (not used so far). |
 | `npm run db:studio` | Opens Drizzle Studio, a browser UI to look at the data. |
-| `npm run db:seed` | Creates the two dev accounts. |
+| `npm run db:seed` | Creates the two dev accounts and the six default expense categories (skips existing ones). Dev only. |
 | `npm run db:create-user -- …` | Creates one account (see above). |
 
 ---
