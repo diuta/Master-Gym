@@ -36,22 +36,12 @@ Changed on day 1: added `role`; removed `failed_login_attempts` and `locked_unti
 | Enum | Values |
 |---|---|
 | `gender` | `male`, `female` |
-| `member_category` | `pelajar`, `mahasiswa`, `umum` (decides which monthly base price applies) |
-| `payment_method` | `cash`, `qris`, `transfer`, `debit` |
+| `member_category` | `pelajar`, `mahasiswa`, `umum` (decides which package price column applies) |
+| `payment_method` | `cash`, `qris`, `transfer` (`debit` was removed on 2026-11-04, see "Removing an enum value" below) |
 
 Sequence `member_no_seq`: source of member numbers (`MG-0001`, formatted in code with `nextval`).
 
 All money columns are `decimal(14,2)` (whole Rupiah as `number` in TypeScript). Plain dates are `date` read as `"YYYY-MM-DD"` strings.
-
-### Table `category_prices`
-
-Set by the superadmin in Membership → Pengaturan Harga. A membership costs `price_per_month` × the package's `months`, computed on the server at save time. A category with no row has no price yet, so it can't be sold.
-
-| Column | Type | Notes |
-|---|---|---|
-| `category` | `member_category` PK | One row per category |
-| `price_per_month` | `decimal(14,2)` not null | Monthly base price |
-| `updated_at` | `timestamp` not null, default now | |
 
 ### Table `packages`
 
@@ -60,8 +50,35 @@ Set by the superadmin in Membership → Pengaturan Harga. A membership costs `pr
 | `id` | `bigserial` PK | |
 | `name` | `varchar(100)` not null | |
 | `months` | `integer` not null | Duration |
+| `price_pelajar` | `decimal(14,2)` not null | Price for the Pelajar category (added 2026-11-04) |
+| `price_mahasiswa` | `decimal(14,2)` not null | Price for the Mahasiswa category |
+| `price_umum` | `decimal(14,2)` not null | Price for the Umum category |
 | `is_active` | `boolean` not null, default true | Inactive packages can't be sold but old memberships keep working |
 | `created_at`, `updated_at` | `timestamp` not null, default now | |
+
+Since 2026-11-04 (spec alignment piece 2) each package stores its own price per category and is managed by both the kasir and the superadmin. The table `category_prices` (monthly base price per category, price = base × months) was removed. `memberships.price`, `visits.price` and `pt_purchases.price` still store the price actually charged, which the kasir may edit on the form; `pt_purchases.sessions` stores the sessions actually sold. `visit_price` stays as the standard Harga Visit that pre-fills the Visit form.
+
+#### Upgrading a database that has data
+
+`db:push` cannot add `not null` columns to a non-empty `packages`. Add them with a default of 0, fill them from the old base price × months, then drop the defaults and drop `category_prices` (the SQL below does this). The dev DB was empty, so this was not run there. Run it before `npm run db:push`; afterwards `db:push` should report no changes.
+
+```sql
+begin;
+alter table packages add column price_pelajar numeric(14,2) not null default 0;
+alter table packages add column price_mahasiswa numeric(14,2) not null default 0;
+alter table packages add column price_umum numeric(14,2) not null default 0;
+update packages p set
+  price_pelajar = coalesce((select c.price_per_month * p.months from category_prices c where c.category = 'pelajar'), 0),
+  price_mahasiswa = coalesce((select c.price_per_month * p.months from category_prices c where c.category = 'mahasiswa'), 0),
+  price_umum = coalesce((select c.price_per_month * p.months from category_prices c where c.category = 'umum'), 0);
+alter table packages alter column price_pelajar drop default;
+alter table packages alter column price_mahasiswa drop default;
+alter table packages alter column price_umum drop default;
+drop table category_prices;
+commit;
+```
+
+A package whose category had no base price ends up with 0; set it in Kelola Paket before selling it.
 
 ### Table `members`
 
@@ -131,7 +148,7 @@ Entered once by the superadmin in Home → Edit Keuangan.
 | Column | Type | Notes |
 |---|---|---|
 | `id` | `integer` PK default 1 | **Single row**: check `opening_balance_single_row` (`id = 1`); the save uses `ON CONFLICT DO NOTHING`, so it can only be saved once |
-| `cash`, `bank` | `decimal(14,2)` not null | Money on hand as of `as_of`. Bank covers QRIS, Transfer and Debit |
+| `cash`, `bank` | `decimal(14,2)` not null | Money on hand as of `as_of`. Bank covers QRIS and Transfer |
 | `as_of` | `date` not null | Only movements dated on or after this day count toward the running balances (Uang Tunai / Uang di Bank) |
 | `created_at` | `timestamp` not null, default now | |
 
@@ -147,9 +164,9 @@ Enums `stock_movement_type` (`initial`, `purchase`, `sale`, `purchase_cancel`, `
 | `products` | `id`, `name`, `category_id` FK, `unit`, `sale_price`, `min_stock` (default 5), `avg_cost` decimal(14,4), `is_active`, timestamps | One unit per product. **There is no stock column** |
 | `suppliers` | `id`, `name` unique, `phone` nullable, `is_active`, timestamps | Managed by the kasir (Kelola Supplier) |
 | `stock_movements` | `id`, `product_id` FK, `qty_delta` int, `type`, `sale_item_id` / `purchase_item_id` nullable FKs, `created_at` | The stock ledger, see below |
-| `sales` | `id`, `invoice_no` unique, `buyer_name` nullable, `date`, `notes`, `total`, `status`, `cancelled_at`, timestamps | |
+| `sales` | `id`, `invoice_no` unique, `buyer_name` nullable, `date`, `notes`, `total`, `status`, `cancelled_at`, `created_by` FK `users.id` nullable, timestamps | `created_by` is the cashier who saved the sale (shown as Kasir in Riwayat Penjualan); null for sales saved before 2026-11-04 |
 | `sale_items` | `id`, `sale_id` FK, `product_id` FK, `product_name`, `unit`, `qty`, `unit_price`, `unit_cost`, `line_total` | Name, unit, price and avg cost are **copied** at sale time (`unit_cost` feeds day 5 profit) |
-| `purchases` | `id`, `invoice_no` unique, `supplier_id` FK, `supplier_name`, `date`, `notes`, `total`, `status`, `cancelled_at`, timestamps | |
+| `purchases` | `id`, `invoice_no` unique, `supplier_id` FK, `supplier_name`, `supplier_invoice_no` varchar(50) nullable, `date`, `notes`, `total`, `status`, `cancelled_at`, timestamps | `supplier_invoice_no` is the supplier's own invoice number, optional, stored as null when left empty |
 | `purchase_items` | `id`, `purchase_id` FK, `product_id` FK, `product_name`, `unit`, `qty`, `unit_cost`, `line_total` | `unit_cost` is typed by the kasir |
 | `expense_categories` | `id`, `name` unique, `is_active`, timestamps | Managed by the superadmin; seeded with Listrik, Air, Gaji, Perawatan Alat, Kebersihan, Lainnya |
 | `expenses` | `id`, `date`, `category_id` FK, `category_name`, `description`, `amount`, `method`, `created_at` | One method, no split, no payments rows |
@@ -209,3 +226,23 @@ The `mastergym/mastergym` password is a public dev default. Use a real password 
 3. Multi-table writes (e.g. "save member + membership + payments") go inside `db.transaction(async (tx) => { ... })`, so a failure undoes all of it.
 4. Store money as `decimal`, dates without time as `date` (`"YYYY-MM-DD"`), and moments as `timestamp`. `timestamp` columns (e.g. `payments.paid_at`) are without time zone and hold UTC wall-clock time (`now()` with the server time zone UTC), so day-5 "today" totals must convert to WIB first, e.g. `(paid_at AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Jakarta')::date = <todayWib()>`.
 5. Mention the change in this file.
+
+### Removing an enum value
+
+`db:push` cannot drop a value from a Postgres enum, so the enum has to be rebuilt by hand. This is what was run on 2026-11-04 to remove `debit` from `payment_method` (in the Docker dev DB: `docker compose exec -T postgres psql -U mastergym -d mastergym -v ON_ERROR_STOP=1`, SQL on stdin). Anyone upgrading an existing database must run it before `npm run db:push`. It aborts if any `debit` row exists, so convert those rows first.
+
+```sql
+begin;
+do $$ begin
+  if exists (select 1 from payments where method = 'debit') or exists (select 1 from expenses where method = 'debit')
+  then raise exception 'debit rows exist; convert them first'; end if;
+end $$;
+alter type payment_method rename to payment_method_old;
+create type payment_method as enum ('cash', 'qris', 'transfer');
+alter table payments alter column method type payment_method using method::text::payment_method;
+alter table expenses alter column method type payment_method using method::text::payment_method;
+drop type payment_method_old;
+commit;
+```
+
+After it, `npm run db:push` should report no changes. A fresh database needs none of this.

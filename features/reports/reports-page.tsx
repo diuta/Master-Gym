@@ -54,7 +54,11 @@ export function ReportsPage({
       </PeriodFilter>
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <StatTile label="Jumlah Transaksi" value={String(tiles.count)} icon={ReceiptText} />
+        <StatTile
+          label="Jumlah Transaksi Penjualan"
+          value={String(tiles.count)}
+          icon={ReceiptText}
+        />
         <Card>
           <CardContent className="space-y-1">
             <div className="flex items-center gap-2 text-base text-muted-foreground">

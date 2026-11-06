@@ -3,7 +3,7 @@ import { normalizePhone, paymentsMatchPrice, todayWib } from "./logic";
 import type { MembershipStatus } from "./logic";
 
 export type { MembershipStatus };
-export type PaymentMethod = "cash" | "qris" | "transfer" | "debit";
+export type PaymentMethod = "cash" | "qris" | "transfer";
 export type MemberCategory = "pelajar" | "mahasiswa" | "umum";
 export type Gender = "male" | "female";
 export type MemberCard = {
@@ -28,25 +28,23 @@ export const PAYMENT_METHOD_LABELS: Record<PaymentMethod, string> = {
   cash: "Cash",
   qris: "QRIS",
   transfer: "Transfer",
-  debit: "Debit",
 };
 
 const price = (label: string) =>
-  z.number({ error: `${label} wajib diisi.` }).int().min(1, { error: `${label} minimal Rp1.` });
+  z
+    .number({ error: `${label} wajib diisi.` })
+    .int()
+    .min(1, { error: `${label} minimal Rp1.` })
+    .max(999_999_999_999, { error: `${label} maksimal Rp999.999.999.999.` });
 
 export const PackageSchema = z.object({
   name: z.string().trim().min(1, { error: "Nama paket wajib diisi." }).max(100, { error: "Nama paket maksimal 100 karakter." }),
   months: z.number({ error: "Durasi wajib diisi." }).int().min(1, { error: "Durasi minimal 1 bulan." }).max(60, { error: "Durasi maksimal 60 bulan." }),
+  pricePelajar: price("Harga pelajar"),
+  priceMahasiswa: price("Harga mahasiswa"),
+  priceUmum: price("Harga umum"),
 });
 export type PackageInput = z.input<typeof PackageSchema>;
-
-export type CategoryPrices = Partial<Record<MemberCategory, number>>;
-export const CategoryPricesSchema = z.object({
-  pelajar: price("Harga pelajar"),
-  mahasiswa: price("Harga mahasiswa"),
-  umum: price("Harga umum"),
-});
-export type CategoryPricesInput = z.input<typeof CategoryPricesSchema>;
 
 const name = z.string().trim().min(1, { error: "Nama wajib diisi." }).max(100, { error: "Nama maksimal 100 karakter." });
 const phone = z
@@ -68,7 +66,7 @@ const photo = z.string().startsWith("data:image/", { error: "Foto wajib diambil.
 const payments = z
   .array(
     z.object({
-      method: z.enum(["cash", "qris", "transfer", "debit"], { error: "Metode pembayaran tidak valid." }),
+      method: z.enum(["cash", "qris", "transfer"], { error: "Metode pembayaran tidak valid." }),
       amount: z.number({ error: "Jumlah wajib diisi." }).int().min(1, { error: "Jumlah minimal Rp1." }),
     }),
   )
@@ -158,6 +156,11 @@ export const PtPurchaseSchema = z
   .object({
     memberId,
     ptProgramId: z.number({ error: "Program PT wajib dipilih." }).int(),
+    sessions: z
+      .number({ error: "Sesi wajib diisi." })
+      .int()
+      .min(1, { error: "Sesi minimal 1." })
+      .max(200, { error: "Sesi maksimal 200." }),
     price: price("Harga"),
     payments,
   })

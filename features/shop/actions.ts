@@ -237,7 +237,7 @@ class SaleError extends Error {}
 export async function createSaleAction(
   input: SaleInput,
 ): Promise<ActionResult<{ invoiceNo: string }>> {
-  await requireRole("kasir");
+  const session = await requireRole("kasir");
   const v = SaleSchema.safeParse(input);
   if (!v.success) return { errors: v.error.flatten().fieldErrors };
   const d = v.data;
@@ -266,6 +266,7 @@ export async function createSaleAction(
           date: d.date,
           notes: d.notes,
           total: String(total),
+          createdBy: session.userId,
         })
         .returning({ id: sales.id });
       const items = await tx
@@ -448,6 +449,7 @@ export async function createPurchaseAction(
           invoiceNo,
           supplierId: supplier.id,
           supplierName: supplier.name,
+          supplierInvoiceNo: d.supplierInvoiceNo ?? null,
           date: d.date,
           notes: d.notes,
           total: String(d.total),

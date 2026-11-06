@@ -1,6 +1,5 @@
 import { requireRole } from "@/lib/auth/dal";
 import {
-  getCategoryPrices,
   getVisitPrice,
   listActivePackages,
   listActivePtPrograms,
@@ -10,9 +9,8 @@ import { PricingPage } from "@/features/membership/pricing-page";
 
 export default async function Page() {
   await requireRole("superadmin");
-  const [packages, prices, visitPrice, trainers, ptPrograms] = await Promise.all([
+  const [packages, visitPrice, trainers, ptPrograms] = await Promise.all([
     listActivePackages(),
-    getCategoryPrices(),
     getVisitPrice(),
     listActiveTrainers(),
     listActivePtPrograms(),
@@ -20,7 +18,6 @@ export default async function Page() {
   return (
     <PricingPage
       packages={packages}
-      prices={prices}
       visitPrice={visitPrice}
       trainers={trainers}
       ptPrograms={ptPrograms}

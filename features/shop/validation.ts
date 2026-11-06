@@ -99,6 +99,7 @@ export type SaleInput = z.input<typeof SaleSchema>;
 export const PurchaseFields = z.object({
   supplierId: z.number({ error: "Supplier wajib dipilih." }).int(),
   date: DateSchema,
+  supplierInvoiceNo: optionalText(50, "No. faktur supplier").optional(),
   notes: optionalText(255, "Catatan"),
   items: z.array(z.object({ productId, qty, unitCost: money("Harga modal") })).min(1, itemsMin),
   total: money("Total"),

@@ -1,4 +1,7 @@
 // Pure rules, no server imports: also used by client components.
+import type { PackageOption } from "./queries";
+import type { MemberCategory } from "./validation";
+
 export type MembershipStatus = "active" | "expiring" | "expired";
 
 const DAY_MS = 86_400_000;
@@ -37,9 +40,8 @@ export function normalizePhone(input: string): string | null {
   return /^0\d{8,13}$/.test(p) ? p : null;
 }
 
-// null when the superadmin hasn't set this category's base price yet.
-export function membershipPrice(pricePerMonth: number | undefined, months: number): number | null {
-  return pricePerMonth === undefined ? null : pricePerMonth * months;
+export function packagePrice(pkg: Pick<PackageOption, "prices">, category: MemberCategory): number {
+  return pkg.prices[category];
 }
 
 export function paymentsMatchPrice(payments: { amount: number }[], price: number): boolean {

@@ -67,6 +67,7 @@ export function TransactionDetailDialog({
             <p>
               {detail.kind === "sale" ? "Pembeli" : "Supplier"}: {detail.party ?? "-"}
             </p>
+            {detail.supplierInvoiceNo && <p>No. Faktur Supplier: {detail.supplierInvoiceNo}</p>}
             {detail.notes && <p>Catatan: {detail.notes}</p>}
             <Table className="text-base">
               <TableHeader>

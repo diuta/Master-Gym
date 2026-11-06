@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
-  CheckInSchema, CheckOutSchema, PtProgramSchema, PtPurchaseSchema, RegisterMemberSchema, RenewMemberSchema,
+  CheckInSchema, CheckOutSchema, PackageSchema, PtProgramSchema, PtPurchaseSchema, RegisterMemberSchema, RenewMemberSchema,
   VisitSchema,
 } from "./validation";
 import { todayWib } from "./logic";
@@ -28,10 +28,36 @@ describe("RegisterMemberSchema", () => {
     ["payments short", { payments: [{ method: "cash", amount: 100000 }] }, "payments"],
     ["zero row", { payments: [{ method: "cash", amount: 250000 }, { method: "qris", amount: 0 }] }, "payments"],
     ["unknown method", { payments: [{ method: "credit", amount: 250000 }] }, "payments"],
+    ["debit method", { payments: [{ method: "debit", amount: 250000 }] }, "payments"],
   ])("rejects %s", (_label, patch, field) => {
     const r = RegisterMemberSchema.safeParse({ ...valid, ...patch });
     expect(r.success).toBe(false);
     expect(Object.keys(r.error!.flatten().fieldErrors)).toContain(field);
+  });
+  it("accepts a kasir-typed price that the single payment matches", () => {
+    const r = RegisterMemberSchema.safeParse({
+      ...valid,
+      price: 123456,
+      payments: [{ method: "cash", amount: 123456 }],
+    });
+    expect(r.success).toBe(true);
+  });
+  it("rejects a typed price the payment does not match", () => {
+    const r = RegisterMemberSchema.safeParse({
+      ...valid,
+      price: 123456,
+      payments: [{ method: "cash", amount: 100000 }],
+    });
+    expect(r.error?.issues.map((i) => i.message)).toEqual([
+      "Total pembayaran harus sama dengan harga.",
+    ]);
+  });
+  it("rejects the removed debit method with the method message", () => {
+    const r = RegisterMemberSchema.safeParse({
+      ...valid,
+      payments: [{ method: "debit", amount: 250000 }],
+    });
+    expect(r.error?.issues.map((i) => i.message)).toEqual(["Metode pembayaran tidak valid."]);
   });
 });
 
@@ -78,6 +104,14 @@ describe("VisitSchema", () => {
     const r = VisitSchema.safeParse({ ...v, price: 60000 });
     expect(errorFields(r)).toContain("payments");
   });
+  it("accepts a kasir-typed price that matches the payments", () => {
+    const r = VisitSchema.safeParse({
+      ...v,
+      price: 30000,
+      payments: [{ method: "cash", amount: 30000 }],
+    });
+    expect(r.success).toBe(true);
+  });
   it("rejects an empty name", () => {
     expect(errorFields(VisitSchema.safeParse({ ...v, name: " " }))).toContain("name");
   });
@@ -91,15 +125,42 @@ describe("RenewMemberSchema", () => {
   it("rejects payments mismatch", () => {
     expect(errorFields(RenewMemberSchema.safeParse({ ...v, price: 1 }))).toContain("payments");
   });
+  it("accepts a kasir-typed price that the single payment matches", () => {
+    const r = RenewMemberSchema.safeParse({
+      ...v,
+      price: 123456,
+      payments: [{ method: "cash", amount: 123456 }],
+    });
+    expect(r.success).toBe(true);
+  });
+  it("rejects a typed price the payment does not match", () => {
+    const r = RenewMemberSchema.safeParse({
+      ...v,
+      price: 123456,
+      payments: [{ method: "cash", amount: 100000 }],
+    });
+    expect(r.error?.issues.map((i) => i.message)).toEqual([
+      "Total pembayaran harus sama dengan harga.",
+    ]);
+  });
   it("rejects missing packageId", () => {
     expect(errorFields(RenewMemberSchema.safeParse({ ...v, packageId: undefined }))).toContain("packageId");
   });
 });
 
 describe("PtPurchaseSchema", () => {
-  const v = { memberId: 1, ptProgramId: 1, price: 50000, payments };
+  const v = { memberId: 1, ptProgramId: 1, sessions: 12, price: 50000, payments };
   it("accepts valid input", () => {
     expect(PtPurchaseSchema.safeParse(v).success).toBe(true);
+  });
+  it.each([
+    ["missing", undefined, "Sesi wajib diisi."],
+    ["zero", 0, "Sesi minimal 1."],
+    ["201", 201, "Sesi maksimal 200."],
+  ])("rejects %s sessions", (_n, sessions, message) => {
+    const r = PtPurchaseSchema.safeParse({ ...v, sessions });
+    expect(r.success).toBe(false);
+    expect(r.error?.issues.map((i) => i.message)).toContain(message);
   });
   it("rejects payments mismatch", () => {
     expect(errorFields(PtPurchaseSchema.safeParse({ ...v, price: 1 }))).toContain("payments");
@@ -112,5 +173,21 @@ describe("PtPurchaseSchema", () => {
 describe("PtProgramSchema", () => {
   it("rejects 0 sessions", () => {
     expect(errorFields(PtProgramSchema.safeParse({ name: "PT 10", sessions: 0, price: 1000 }))).toContain("sessions");
+  });
+});
+
+describe("PackageSchema", () => {
+  const pkg = { name: "Paket 1 Bulan", months: 1, pricePelajar: 150000, priceMahasiswa: 175000, priceUmum: 200000 };
+  it("accepts a full valid package", () => {
+    expect(PackageSchema.safeParse(pkg).success).toBe(true);
+  });
+  it.each([
+    ["missing pelajar", { pricePelajar: undefined }, "Harga pelajar wajib diisi."],
+    ["zero umum", { priceUmum: 0 }, "Harga umum minimal Rp1."],
+    ["huge mahasiswa", { priceMahasiswa: 1_000_000_000_000 }, "Harga mahasiswa maksimal Rp999.999.999.999."],
+  ])("rejects %s", (_n, patch, message) => {
+    const r = PackageSchema.safeParse({ ...pkg, ...patch });
+    expect(r.success).toBe(false);
+    expect(r.error?.issues.map((i) => i.message)).toContain(message);
   });
 });

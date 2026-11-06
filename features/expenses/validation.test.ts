@@ -30,3 +30,8 @@ it("gives impossible dates the invalid message, not the future one", () => {
   const r = ExpenseSchema.safeParse({ ...valid, date: "2025-13-45" });
   expect(r.error?.issues.map((i) => i.message)).toEqual(["Tanggal tidak valid."]);
 });
+
+it("rejects the removed debit method", () => {
+  const r = ExpenseSchema.safeParse({ ...valid, method: "debit" });
+  expect(r.error?.issues.map((i) => i.message)).toEqual(["Metode pembayaran tidak valid."]);
+});

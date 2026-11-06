@@ -14,7 +14,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { PAYMENT_METHOD_LABELS } from "@/features/membership/validation";
+import { cashBankLabel } from "@/features/reports/logic";
 import { formatDateId, rupiah } from "@/lib/format";
 import type { Period } from "@/lib/period";
 import type { Role } from "@/lib/auth/session";
@@ -73,7 +73,7 @@ export function PurchasesHistoryPage({
                   <TableCell className="text-right">{rupiah.format(r.unitCost)}</TableCell>
                   <TableCell className="text-right">{rupiah.format(r.lineTotal)}</TableCell>
                   <TableCell>{r.supplierName}</TableCell>
-                  <TableCell>{r.methods.map((m) => PAYMENT_METHOD_LABELS[m]).join(", ")}</TableCell>
+                  <TableCell>{cashBankLabel(r.methods)}</TableCell>
                   <TableCell>
                     <StatusBadge status={r.status} />
                   </TableCell>

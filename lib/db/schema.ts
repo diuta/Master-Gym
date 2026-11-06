@@ -37,22 +37,17 @@ export const paymentMethodEnum = pgEnum("payment_method", [
   "cash",
   "qris",
   "transfer",
-  "debit",
 ]);
 
 export const memberNoSeq = pgSequence("member_no_seq");
-
-// Monthly base price per category; a membership costs this × package months.
-export const categoryPrices = pgTable("category_prices", {
-  category: memberCategoryEnum("category").primaryKey(),
-  pricePerMonth: decimal("price_per_month", { precision: 14, scale: 2 }).notNull(),
-  updatedAt: timestamp("updated_at").notNull().defaultNow(),
-});
 
 export const packages = pgTable("packages", {
   id: bigserial("id", { mode: "number" }).primaryKey(),
   name: varchar("name", { length: 100 }).notNull(),
   months: integer("months").notNull(),
+  pricePelajar: decimal("price_pelajar", { precision: 14, scale: 2 }).notNull(),
+  priceMahasiswa: decimal("price_mahasiswa", { precision: 14, scale: 2 }).notNull(),
+  priceUmum: decimal("price_umum", { precision: 14, scale: 2 }).notNull(),
   isActive: boolean("is_active").notNull().default(true),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
@@ -238,6 +233,8 @@ export const sales = pgTable(
     total: decimal("total", { precision: 14, scale: 2 }).notNull(),
     status: transactionStatusEnum("status").notNull().default("success"),
     cancelledAt: timestamp("cancelled_at"),
+    // Nullable: sales saved before this column existed have no recorded cashier.
+    createdBy: bigint("created_by", { mode: "number" }).references(() => users.id),
     createdAt: timestamp("created_at").notNull().defaultNow(),
     updatedAt: timestamp("updated_at").notNull().defaultNow(),
   },
@@ -274,6 +271,7 @@ export const purchases = pgTable(
       .notNull()
       .references(() => suppliers.id),
     supplierName: varchar("supplier_name", { length: 100 }).notNull(),
+    supplierInvoiceNo: varchar("supplier_invoice_no", { length: 50 }),
     date: date("date", { mode: "string" }).notNull(),
     notes: varchar("notes", { length: 255 }),
     total: decimal("total", { precision: 14, scale: 2 }).notNull(),

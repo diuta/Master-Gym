@@ -1,3 +1,5 @@
+import type { PaymentMethod } from "@/features/membership/validation";
+
 export type Method = "cash" | "bank";
 export type MethodFilter = "all" | Method;
 export type IncomeKind = "sale" | "membership" | "visit" | "pt";
@@ -17,8 +19,16 @@ export type Movement = {
 
 export type Opening = { cash: number; bank: number; asOf: string } | null;
 
-export function methodOf(m: "cash" | "qris" | "transfer" | "debit"): Method {
+export function methodOf(m: PaymentMethod): Method {
   return m === "cash" ? "cash" : "bank";
+}
+
+// Histories show only Cash / Bank, so qris and transfer collapse into Bank.
+export function cashBankLabel(methods: (PaymentMethod | Method)[]): string {
+  const parts: string[] = [];
+  if (methods.includes("cash")) parts.push("Cash");
+  if (methods.some((m) => m !== "cash")) parts.push("Bank");
+  return parts.length ? parts.join(" + ") : "-";
 }
 
 export function parseMethodFilter(v: string | undefined): MethodFilter {
@@ -96,6 +106,11 @@ export function profitPercent(rows: Movement[], f: MethodFilter): number | null 
 
 export function transactionCount(rows: Movement[], f: MethodFilter): number {
   return new Set(incomeRows(rows, f).map((r) => `${r.kind}:${r.docId}`)).size;
+}
+
+// The Laporan tile is "Jumlah Transaksi Penjualan": product sales only, unlike transactionCount.
+export function saleCount(rows: Movement[], f: MethodFilter): number {
+  return new Set(byMethod(rows, f).filter((r) => r.kind === "sale").map((r) => r.docId)).size;
 }
 
 export function balances(opening: Opening, rows: Movement[]): { cash: number; bank: number } {

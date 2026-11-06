@@ -11,7 +11,7 @@ import {
   productProfit,
   salesDetail,
   profitPercent,
-  transactionCount,
+  saleCount,
 } from "@/features/reports/logic";
 import { listMovements, listSaleLines } from "@/features/reports/queries";
 import { ReportsPage } from "@/features/reports/reports-page";
@@ -40,7 +40,7 @@ export default async function Page({
       to={sp.to}
       method={method}
       tiles={{
-        count: transactionCount(rows, method),
+        count: saleCount(rows, method),
         omzet: omzet(rows, method),
         byKind: omzetByKind(rows, method),
         cost: costOfGoods(rows, method),

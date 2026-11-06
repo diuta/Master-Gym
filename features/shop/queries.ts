@@ -10,6 +10,7 @@ import {
   saleItems,
   sales,
   suppliers,
+  users,
 } from "@/lib/db/schema";
 import type { PaymentMethod } from "@/features/membership/validation";
 import { stockStatus } from "./logic";
@@ -93,6 +94,7 @@ export type SaleRow = {
   itemsLabel: string;
   total: number;
   buyerName: string | null;
+  cashierName: string | null;
   methods: PaymentMethod[];
   status: Status;
 };
@@ -118,6 +120,7 @@ export type TransactionDetail = {
   invoiceNo: string;
   date: string;
   party: string | null;
+  supplierInvoiceNo: string | null;
   notes: string | null;
   status: Status;
   items: { name: string; unit: string; qty: number; unitPrice: number; lineTotal: number }[];
@@ -144,8 +147,9 @@ async function methodsFor(col: "saleId" | "purchaseId", ids: number[]) {
 
 export async function listSales(range: Range, productId?: number): Promise<SaleRow[]> {
   const rows = await db
-    .select()
+    .select({ sale: sales, cashierName: users.name })
     .from(sales)
+    .leftJoin(users, eq(users.id, sales.createdBy))
     .where(
       and(
         range.from ? gte(sales.date, range.from) : undefined,
@@ -159,7 +163,7 @@ export async function listSales(range: Range, productId?: number): Promise<SaleR
       ),
     )
     .orderBy(desc(sales.date), desc(sales.id));
-  const ids = rows.map((r) => r.id);
+  const ids = rows.map((r) => r.sale.id);
   const [items, methods] = await Promise.all([
     ids.length
       ? db.select().from(saleItems).where(inArray(saleItems.saleId, ids)).orderBy(asc(saleItems.id))
@@ -172,13 +176,14 @@ export async function listSales(range: Range, productId?: number): Promise<SaleR
     l.push(`${it.productName} ×${it.qty}`);
     labels.set(it.saleId, l);
   }
-  return rows.map((r) => ({
+  return rows.map(({ sale: r, cashierName }) => ({
     id: r.id,
     invoiceNo: r.invoiceNo,
     date: r.date,
     itemsLabel: (labels.get(r.id) ?? []).join(", "),
     total: Number(r.total),
     buyerName: r.buyerName,
+    cashierName,
     methods: methods.get(r.id) ?? [],
     status: r.status,
   }));
@@ -232,6 +237,7 @@ export async function getSaleDetail(id: number): Promise<TransactionDetail | nul
     invoiceNo: s.invoiceNo,
     date: s.date,
     party: s.buyerName,
+    supplierInvoiceNo: null,
     notes: s.notes,
     status: s.status,
     items: items.map((i) => ({
@@ -259,6 +265,7 @@ export async function getPurchaseDetail(id: number): Promise<TransactionDetail |
     invoiceNo: p.invoiceNo,
     date: p.date,
     party: p.supplierName,
+    supplierInvoiceNo: p.supplierInvoiceNo,
     notes: p.notes,
     status: p.status,
     items: items.map((i) => ({

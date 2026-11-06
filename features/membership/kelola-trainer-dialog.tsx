@@ -35,11 +35,13 @@ import type { TrainerOption } from "./queries";
 type FormState = { name: string; phone: string };
 const EMPTY: FormState = { name: "", phone: "" };
 
-export function KelolaTrainerDialog({ trainers }: { trainers: TrainerOption[] }) {
+// A hook, not a component: its state must live in the host so the delete confirmation can
+// replace the list while the host dialog is closed.
+export function useTrainerManager({ trainers }: { trainers: TrainerOption[] }) {
   const router = useRouter();
-  // One stage machine instead of a nested AlertDialog, so the delete
-  // confirmation replaces the list rather than stacking on top of it.
-  const [stage, setStage] = useState<"closed" | "list" | "confirmDelete">("closed");
+  // The delete confirmation replaces the list (the host closes its dialog while this is
+  // true) rather than stacking on top of it.
+  const [confirming, setConfirming] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<TrainerOption | null>(null);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [form, setForm] = useState<FormState>(EMPTY);
@@ -102,20 +104,169 @@ export function KelolaTrainerDialog({ trainers }: { trainers: TrainerOption[] })
     const ok = await run(() => deleteTrainerAction(deleteTarget.id));
     if (ok) {
       if (editingId === deleteTarget.id) resetForm();
-      setStage("list");
+      setConfirming(false);
     }
   }
 
   const fieldError = (key: string) =>
     errors[key]?.[0] && <p className="text-sm text-destructive">{errors[key][0]}</p>;
 
+  const list = (
+    <>
+      <div className="space-y-2">
+        {trainers.length === 0 ? (
+          <EmptyState
+            icon={Users}
+            title="Belum ada trainer"
+            description="Tambahkan trainer pertama lewat form di bawah."
+            className="py-4"
+          />
+        ) : (
+          trainers.map((p) => (
+            <div key={p.id} className="flex items-center gap-2 rounded-md border px-3 py-2">
+              <p className="flex-1 text-base font-medium">
+                {p.name}{" "}
+                <span className="font-normal text-muted-foreground">· {p.phone}</span>
+              </p>
+              <Button
+                variant="outline"
+                className="h-11"
+                disabled={pending}
+                onClick={() => startEdit(p)}
+              >
+                <Pencil />
+                Edit
+              </Button>
+              <Button
+                variant="destructive"
+                className="h-11"
+                disabled={pending}
+                onClick={() => {
+                  setDeleteTarget(p);
+                  setMessage(null);
+                  setConfirming(true);
+                }}
+              >
+                <Trash2 />
+                Hapus
+              </Button>
+            </div>
+          ))
+        )}
+      </div>
+
+      <form onSubmit={handleSubmit} className="space-y-3 border-t pt-4">
+        <p className="text-base font-medium">
+          {editingId === null ? "Tambah Trainer Baru" : "Edit Trainer"}
+        </p>
+        <div className="space-y-1.5">
+          <Label htmlFor="trainer-name">
+            Nama
+            <RequiredMark />
+          </Label>
+          <Input
+            id="trainer-name"
+            className="h-11 text-base"
+            value={form.name}
+            onChange={(e) => set("name")(e.target.value)}
+            disabled={pending}
+          />
+          {fieldError("name")}
+        </div>
+        <div className="space-y-1.5">
+          <Label htmlFor="trainer-phone">
+            No. HP
+            <RequiredMark />
+          </Label>
+          <Input
+            id="trainer-phone"
+            className="h-11 text-base"
+            inputMode="tel"
+            value={form.phone}
+            onChange={(e) => set("phone")(e.target.value)}
+            disabled={pending}
+          />
+          {fieldError("phone")}
+        </div>
+        {message && !confirming && (
+          <Alert variant="destructive">
+            <AlertCircle />
+            <AlertDescription>{message}</AlertDescription>
+          </Alert>
+        )}
+        <div className="flex gap-2">
+          <Button type="submit" variant="success" className="h-11 text-base" disabled={pending}>
+            {editingId === null && <Plus />}
+            {pending ? "Menyimpan..." : editingId === null ? "Tambah" : "Simpan"}
+          </Button>
+          {editingId !== null && (
+            <Button
+              type="button"
+              variant="outline"
+              className="h-11 text-base"
+              disabled={pending}
+              onClick={resetForm}
+            >
+              Batal
+            </Button>
+          )}
+        </div>
+      </form>
+    </>
+  );
+
+  const confirmDialog = (
+    <AlertDialog open={confirming} onOpenChange={setConfirming}>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>Hapus trainer {deleteTarget?.name}?</AlertDialogTitle>
+          <AlertDialogDescription>
+            Trainer yang sudah pernah dipakai di absen hanya dinonaktifkan, riwayat absen tidak
+            berubah.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        {message && (
+          <Alert variant="destructive">
+            <AlertCircle />
+            <AlertDescription>{message}</AlertDescription>
+          </Alert>
+        )}
+        <AlertDialogFooter>
+          <AlertDialogAction
+            variant="outline"
+            className="h-11"
+            onClick={() => setConfirming(false)}
+            disabled={pending}
+          >
+            Kembali
+          </AlertDialogAction>
+          <AlertDialogAction
+            variant="destructive"
+            className="h-11"
+            onClick={handleDelete}
+            disabled={pending}
+          >
+            {pending ? "Menghapus..." : "Ya, Hapus"}
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+  );
+
+  return { list, confirmDialog, confirming, resetForm };
+}
+
+export function KelolaTrainerDialog({ trainers }: { trainers: TrainerOption[] }) {
+  const [open, setOpen] = useState(false);
+  const m = useTrainerManager({ trainers });
+
   return (
     <>
       <Dialog
-        open={stage === "list"}
+        open={open && !m.confirming}
         onOpenChange={(next) => {
-          setStage(next ? "list" : "closed");
-          if (!next) resetForm();
+          setOpen(next);
+          if (!next) m.resetForm();
         }}
       >
         <DialogTrigger render={<Button variant="outline" className="h-11 text-base" />}>
@@ -126,147 +277,10 @@ export function KelolaTrainerDialog({ trainers }: { trainers: TrainerOption[] })
           <DialogHeader>
             <DialogTitle>Kelola Trainer</DialogTitle>
           </DialogHeader>
-
-          <div className="space-y-2">
-            {trainers.length === 0 ? (
-              <EmptyState
-                icon={Users}
-                title="Belum ada trainer"
-                description="Tambahkan trainer pertama lewat form di bawah."
-                className="py-4"
-              />
-            ) : (
-              trainers.map((p) => (
-                <div key={p.id} className="flex items-center gap-2 rounded-md border px-3 py-2">
-                  <p className="flex-1 text-base font-medium">
-                    {p.name}{" "}
-                    <span className="font-normal text-muted-foreground">· {p.phone}</span>
-                  </p>
-                  <Button
-                    variant="outline"
-                    className="h-11"
-                    disabled={pending}
-                    onClick={() => startEdit(p)}
-                  >
-                    <Pencil />
-                    Edit
-                  </Button>
-                  <Button
-                    variant="destructive"
-                    className="h-11"
-                    disabled={pending}
-                    onClick={() => {
-                      setDeleteTarget(p);
-                      setMessage(null);
-                      setStage("confirmDelete");
-                    }}
-                  >
-                    <Trash2 />
-                    Hapus
-                  </Button>
-                </div>
-              ))
-            )}
-          </div>
-
-          <form onSubmit={handleSubmit} className="space-y-3 border-t pt-4">
-            <p className="text-base font-medium">
-              {editingId === null ? "Tambah Trainer Baru" : "Edit Trainer"}
-            </p>
-            <div className="space-y-1.5">
-              <Label htmlFor="trainer-name">
-                Nama
-                <RequiredMark />
-              </Label>
-              <Input
-                id="trainer-name"
-                className="h-11 text-base"
-                value={form.name}
-                onChange={(e) => set("name")(e.target.value)}
-                disabled={pending}
-              />
-              {fieldError("name")}
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="trainer-phone">
-                No. HP
-                <RequiredMark />
-              </Label>
-              <Input
-                id="trainer-phone"
-                className="h-11 text-base"
-                inputMode="tel"
-                value={form.phone}
-                onChange={(e) => set("phone")(e.target.value)}
-                disabled={pending}
-              />
-              {fieldError("phone")}
-            </div>
-            {message && stage === "list" && (
-              <Alert variant="destructive">
-                <AlertCircle />
-                <AlertDescription>{message}</AlertDescription>
-              </Alert>
-            )}
-            <div className="flex gap-2">
-              <Button type="submit" variant="success" className="h-11 text-base" disabled={pending}>
-                {editingId === null && <Plus />}
-                {pending ? "Menyimpan..." : editingId === null ? "Tambah" : "Simpan"}
-              </Button>
-              {editingId !== null && (
-                <Button
-                  type="button"
-                  variant="outline"
-                  className="h-11 text-base"
-                  disabled={pending}
-                  onClick={resetForm}
-                >
-                  Batal
-                </Button>
-              )}
-            </div>
-          </form>
+          {m.list}
         </DialogContent>
       </Dialog>
-
-      <AlertDialog
-        open={stage === "confirmDelete"}
-        onOpenChange={(next) => setStage(next ? "confirmDelete" : "list")}
-      >
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Hapus trainer {deleteTarget?.name}?</AlertDialogTitle>
-            <AlertDialogDescription>
-              Trainer yang sudah pernah dipakai di absen hanya dinonaktifkan, riwayat absen tidak
-              berubah.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          {message && (
-            <Alert variant="destructive">
-              <AlertCircle />
-              <AlertDescription>{message}</AlertDescription>
-            </Alert>
-          )}
-          <AlertDialogFooter>
-            <AlertDialogAction
-              variant="outline"
-              className="h-11"
-              onClick={() => setStage("list")}
-              disabled={pending}
-            >
-              Kembali
-            </AlertDialogAction>
-            <AlertDialogAction
-              variant="destructive"
-              className="h-11"
-              onClick={handleDelete}
-              disabled={pending}
-            >
-              {pending ? "Menghapus..." : "Ya, Hapus"}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      {m.confirmDialog}
     </>
   );
 }

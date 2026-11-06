@@ -109,7 +109,7 @@ master-gym/
 | `/membership/attendance` | `.../membership/attendance/page.tsx` | kasir | Riwayat Absen: members and visitors for one date (`?date=YYYY-MM-DD`) |
 | `/membership/members` | `.../membership/members/page.tsx` | kasir | Data Member: search, status filter incl. Visitor, Total Kehadiran, Detail, Edit and PDF buttons |
 | `/membership/payment` | `.../membership/payment/page.tsx` | kasir | Pembayaran: form picker driven by `?form=new\|visit\|renew\|addon&member=<id>` (Daftar Member Baru, Visit, Perpanjang, Add-On PT) |
-| `/membership/pricing` | `.../membership/pricing/page.tsx` | superadmin | Pengaturan Harga: monthly base price per category, Harga Visit, Kelola Paket, Kelola Trainer, Kelola Program PT |
+| `/membership/pricing` | `.../membership/pricing/page.tsx` | superadmin | Pengaturan Harga: Harga Visit (standard), Kelola Paket, Kelola Trainer, Kelola Program PT (no base-price card since piece 2) |
 | `/api/uploads/...` | `app/api/uploads/[...path]/route.ts` | kasir | Member photo files (`requireRole`, so not-logged-in or superadmin is redirected; `proxy.ts` skips `/api`) |
 | `/inventory` | `app/(app)/inventory/page.tsx` | kasir | Inventori: summary, product table, Kelola Kategori, Tambah Produk wizard, Edit |
 | `/sales/new` | `app/(app)/sales/new/page.tsx` | kasir | Tambah Penjualan: 4-step wizard |
@@ -202,11 +202,7 @@ Future feature actions follow the same steps, in Sembako's order: `requireRole(.
 | `app/page.tsx` | `redirect("/dashboard")`. |
 | `app/login/page.tsx` | One line: re-exports the login page from `features/authentication`. |
 | `app/(app)/layout.tsx` | The logged-in shell: session check, user lookup, sidebar, header bar (sidebar toggle + "Master Gym"), and `<main>` with padding. |
-<<<<<<< Updated upstream
-| `app/(app)/**/page.tsx` | The 13 pages listed in section 3. Members and payment fetch data and render `features/membership/*`; the rest are placeholders. |
-=======
 | `app/(app)/**/page.tsx` | The 14 logged-in pages listed in section 3. Each calls `requireRole` (or `verifySession` for the shared dashboard), loads data from `features/*/queries.ts` and renders a `features/*` page. All pages are built. |
->>>>>>> Stashed changes
 | `app/api/uploads/[...path]/route.ts` | `GET`: `requireRole("kasir")`, then `readUpload()`; content type from the file extension, `private` cache for a day; 404 for an unknown extension, a missing file or a path outside `UPLOADS_DIR`. |
 
 ### `features/authentication/`
@@ -221,23 +217,24 @@ Future feature actions follow the same steps, in Sembako's order: `requireRole(.
 
 | File | What it does |
 |---|---|
-| `logic.ts` | Pure functions (tested): `todayWib`, `wibDayRange`, `renewalStartDate`, `membershipEndDate`, `daysRemaining`, `membershipStatus` (active / expiring ≤ 7 days / expired), `normalizePhone`, `membershipPrice` (base × months), `paymentsMatchPrice`, `formatMemberNo`. |
-| `validation.ts` | Zod schemas (`PackageSchema`, `CategoryPricesSchema`, `RegisterMemberSchema`, `UpdateMemberSchema`, `CheckInSchema`, `VisitSchema`, `RenewMemberSchema`, `PtPurchaseSchema`, `TrainerSchema`, `PtProgramSchema`, `VisitPriceSchema`), labels, shared types (`MemberCard`, `MemberSummary`, `AttendanceRow`, `ActionResult`). Indonesian messages. |
-| `queries.ts` | Server-only reads: `listActivePackages()`, `getCategoryPrices()`, `listMembers()` (members joined with their latest membership, status computed, `totalCheckIns`), `getVisitPrice`, `listActiveTrainers`, `listActivePtPrograms`, `getMemberSummary`, `findMemberSummary` (token or phone), `searchMembers`, `listAttendance(date)`, `listVisitors`, `getMemberDetail`. |
-| `actions.ts` | `"use server"`. Superadmin only: `saveCategoryPricesAction`, package create/update/delete. Superadmin also: `saveVisitPriceAction`, trainer and PT program create/update/delete. Kasir only: `registerMemberAction` (recomputes the price on the server; one transaction: member number from `member_no_seq`, photo saved, member + membership + payments), `updateMemberAction`, `lookupMemberAction`, `checkInAction` (refuses expired members and PT without balance), `createVisitAction` (visit + payments = visitor check-in), `searchMembersAction`, `renewMemberAction`, `buyPtAction`, `memberDetailAction`. |
+| `logic.ts` | Pure functions (tested): `todayWib`, `wibDayRange`, `renewalStartDate`, `membershipEndDate`, `daysRemaining`, `membershipStatus` (active / expiring ≤ 7 days / expired), `normalizePhone`, `packagePrice(pkg, category)` (replaces `membershipPrice`), `paymentsMatchPrice`, `formatMemberNo`. |
+| `validation.ts` | Zod schemas (`PackageSchema` (now with `pricePelajar`, `priceMahasiswa`, `priceUmum`), `RegisterMemberSchema`, `UpdateMemberSchema`, `CheckInSchema`, `VisitSchema`, `RenewMemberSchema`, `PtPurchaseSchema`, `TrainerSchema`, `PtProgramSchema`, `VisitPriceSchema`), labels, shared types (`MemberCard`, `MemberSummary`, `AttendanceRow`, `ActionResult`). Indonesian messages. |
+| `queries.ts` | Server-only reads: `listActivePackages()` (with the three prices), `listMembers()` (members joined with their latest membership, status computed, `totalCheckIns`), `getVisitPrice`, `listActiveTrainers`, `listActivePtPrograms`, `getMemberSummary`, `findMemberSummary` (token or phone), `searchMembers`, `listAttendance(date)`, `listVisitors`, `getMemberDetail`. |
+| `actions.ts` | `"use server"`. Kasir + superadmin (`requireRole("kasir", "superadmin")`): package, trainer and PT program create/update/delete. Superadmin only: `saveVisitPriceAction`. Kasir only: `registerMemberAction` (accepts the typed price, payments must equal it exactly; one transaction: member number from `member_no_seq`, photo saved, member + membership + payments), `updateMemberAction`, `lookupMemberAction`, `checkInAction` (refuses expired members and PT without balance), `createVisitAction` (visit + payments = visitor check-in), `searchMembersAction`, `renewMemberAction`, `buyPtAction`, `memberDetailAction`. |
 | `payment-page.tsx` | The Pembayaran page: form dropdown driven by `?form=`, hosts the four forms. |
-| `pricing-page.tsx` | Pengaturan Harga (superadmin): base price form, Harga Visit form, Kelola Paket / Trainer / Program PT buttons. |
+| `pricing-page.tsx` | Pengaturan Harga (superadmin): Harga Visit form, Kelola Paket / Trainer / Program PT buttons. |
 | `register-member-wizard.tsx` | Daftar Member Baru: details → photo → package and price → payment → "Cek Lagi" review; downloads the PDF after saving. |
 | `payment-rows.tsx` | Split-payment rows (method + amount). Day 3/4 forms reuse it. |
-| `kelola-paket-dialog.tsx` | Pop-up to add, edit and delete packages (name + months). |
+| `kelola-paket-dialog.tsx` | Pop-up to add, edit and delete packages (name, months, three prices). Opened from Daftar Member Baru and Pengaturan Harga. |
 | `webcam-capture.tsx` | `getUserMedia` preview + capture to a JPEG data URL. |
 | `member-pdf.ts` | `downloadMemberPdf(card)`: builds the 90×160 mm PDF with `jspdf` + `qrcode`. |
 | `members-page.tsx`, `edit-member-dialog.tsx` | Data Member table (search, filter incl. Visitor, Total Kehadiran, Detail) and the Edit pop-up (including photo retake). |
 | `check-in-page.tsx` | Absen: scan input that keeps focus, member pop-up, today's list. |
 | `attendance-table.tsx`, `attendance-page.tsx` | Attendance table (used by Absen and Riwayat Absen) and Riwayat Absen with the date filter. |
 | `member-search.tsx` | Search/scan → pick a member (used by Perpanjang and Add-On). |
-| `visit-form.tsx`, `renew-member-form.tsx`, `pt-addon-form.tsx` | The three Pembayaran forms added on day 3. |
-| `kelola-trainer-dialog.tsx`, `kelola-program-pt-dialog.tsx` | Superadmin CRUD pop-ups, same pattern as Kelola Paket. |
+| `visit-form.tsx`, `renew-member-form.tsx`, `pt-addon-form.tsx` | The three Pembayaran forms added on day 3. Since piece 2 Harga is filled from the list and editable (Visit: from the standard price, empty if none; Add-On also has editable Sesi); one payment row follows Harga. |
+| `kelola-trainer-dialog.tsx`, `kelola-program-pt-dialog.tsx` | CRUD pop-ups for trainers and PT programs (kasir + superadmin). Each exports a hook, `useTrainerManager` / `useProgramPtManager`, used by the dialog and by the wrapper below. |
+| `kelola-trainer-paket-tambahan-dialog.tsx` | New wrapper pop-up for the Add-On form: a select ("Data Trainer" / "Program Trainer") showing one of the two managers. |
 | `member-detail-dialog.tsx` | Detail pop-up: PT balance + check-in history. |
 | `*.test.ts` | Vitest unit tests for `logic.ts` and `validation.ts`. |
 
@@ -247,7 +244,7 @@ Day 5 changes here: `checkOutAction` (kasir; sets `checked_out_at` for a member 
 
 | File | What it does |
 |---|---|
-| `logic.ts` | Pure functions (tested): the `Movement` list type, `methodOf` (QRIS/Transfer/Debit → bank), `splitWhole` / `saleCostShares` (whole-rupiah split of cost of goods), `inRange`, `byMethod`, `omzet`, `omzetByKind`, `costOfGoods`, `expensesTotal`, `netProfit`, `goodsProfit`, `profitPercent`, `transactionCount`, `balances` (opening + movements since `as_of`), `recentTransactions`, `productProfit`. |
+| `logic.ts` | Pure functions (tested): the `Movement` list type, `methodOf` (QRIS/Transfer → bank), `cashBankLabel` (Cash / Bank / Cash + Bank for the history tables), `splitWhole` / `saleCostShares` (whole-rupiah split of cost of goods), `inRange`, `byMethod`, `omzet`, `omzetByKind`, `costOfGoods`, `expensesTotal`, `netProfit`, `goodsProfit`, `profitPercent`, `transactionCount`, `saleCount` (sales only, for Laporan), `balances` (opening + movements since `as_of`), `recentTransactions`, `productProfit`. |
 | `queries.ts` | Server-only. `listMovements()` builds one list of money movements (payments of sales, purchases, memberships, visits and PT, plus expenses, with sale cost of goods), `listSaleLines()`, `getOpeningBalance()`. Aggregates in memory (marked `// shortcut:`). |
 | `validation.ts` | `OpeningBalanceSchema` (date, cash, bank; whole rupiah ≥ 0). |
 | `actions.ts` | `"use server"`. Superadmin: `saveOpeningBalanceAction` (insert once; a second save answers "Saldo awal sudah diisi."). |

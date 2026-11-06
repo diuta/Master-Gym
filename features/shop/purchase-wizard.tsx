@@ -46,6 +46,7 @@ type Line = { productId: number; qty: string; cost: string };
 type FormState = {
   supplierId: number | null;
   date: string;
+  supplierInvoiceNo: string;
   notes: string;
   lines: Line[];
   payments: PaymentRow[];
@@ -54,6 +55,7 @@ type FormState = {
 const emptyForm = (): FormState => ({
   supplierId: null,
   date: todayWib(),
+  supplierInvoiceNo: "",
   notes: "",
   lines: [],
   payments: [{ method: "cash", amount: 0 }],
@@ -104,6 +106,7 @@ export function PurchaseWizard({
     return {
       supplierId: form.supplierId ?? undefined,
       date: form.date,
+      supplierInvoiceNo: form.supplierInvoiceNo,
       notes: form.notes,
       items: rows.map((r) => ({ productId: r.p.id, qty: r.qty, unitCost: r.cost })),
       total,
@@ -114,7 +117,12 @@ export function PurchaseWizard({
   function validateStep(key: string): boolean {
     let errs: Record<string, string[]> = {};
     if (key === "info") {
-      const r = PurchaseFields.pick({ supplierId: true, date: true, notes: true }).safeParse(toInput());
+      const r = PurchaseFields.pick({
+        supplierId: true,
+        date: true,
+        supplierInvoiceNo: true,
+        notes: true,
+      }).safeParse(toInput());
       if (!r.success) errs = r.error.flatten().fieldErrors;
     } else if (key === "items") {
       if (rows.length === 0) errs = { items: ["Minimal satu barang."] };
@@ -198,6 +206,17 @@ export function PurchaseWizard({
             <div className="space-y-1.5">
               <Label htmlFor="purchase-invoice">Invoice</Label>
               <Input id="purchase-invoice" className="h-11 text-base" value="Otomatis" disabled readOnly />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="purchase-supplier-invoice">No. Faktur Supplier</Label>
+              <Input
+                id="purchase-supplier-invoice"
+                className="h-11 text-base"
+                maxLength={50}
+                value={form.supplierInvoiceNo}
+                onChange={(e) => set("supplierInvoiceNo", e.target.value)}
+              />
+              {fieldError("supplierInvoiceNo")}
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="purchase-supplier">
@@ -327,6 +346,12 @@ export function PurchaseWizard({
               <dd>{supplier?.name ?? "-"}</dd>
               <dt className="text-muted-foreground">Tanggal</dt>
               <dd>{form.date}</dd>
+              {form.supplierInvoiceNo.trim() && (
+                <>
+                  <dt className="text-muted-foreground">No. Faktur Supplier</dt>
+                  <dd>{form.supplierInvoiceNo.trim()}</dd>
+                </>
+              )}
               <dt className="text-muted-foreground">Catatan</dt>
               <dd>{form.notes.trim() || "-"}</dd>
             </dl>

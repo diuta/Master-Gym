@@ -2,7 +2,6 @@ import "server-only";
 import { and, asc, count, desc, eq, gte, ilike, lt, max, min, or, sql } from "drizzle-orm";
 import { db } from "@/lib/db";
 import {
-  categoryPrices,
   checkIns,
   members,
   memberships,
@@ -17,7 +16,6 @@ import { formatTimeWib } from "@/lib/format";
 import { daysRemaining, membershipStatus, normalizePhone, todayWib, wibDayRange } from "./logic";
 import type {
   AttendanceRow,
-  CategoryPrices,
   Gender,
   MemberCard,
   MemberCategory,
@@ -29,19 +27,25 @@ export type PackageOption = {
   id: number;
   name: string;
   months: number;
+  prices: Record<MemberCategory, number>;
 };
 
 export async function listActivePackages(): Promise<PackageOption[]> {
-  return db
-    .select({ id: packages.id, name: packages.name, months: packages.months })
+  const rows = await db
+    .select()
     .from(packages)
     .where(eq(packages.isActive, true))
     .orderBy(asc(packages.months), asc(packages.name));
-}
-
-export async function getCategoryPrices(): Promise<CategoryPrices> {
-  const rows = await db.select().from(categoryPrices);
-  return Object.fromEntries(rows.map((r) => [r.category, Number(r.pricePerMonth)]));
+  return rows.map((r) => ({
+    id: r.id,
+    name: r.name,
+    months: r.months,
+    prices: {
+      pelajar: Number(r.pricePelajar),
+      mahasiswa: Number(r.priceMahasiswa),
+      umum: Number(r.priceUmum),
+    },
+  }));
 }
 
 export async function getVisitPrice(): Promise<number | null> {

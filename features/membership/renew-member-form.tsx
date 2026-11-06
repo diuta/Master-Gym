@@ -4,6 +4,7 @@ import { useState, useTransition } from "react";
 import { AlertCircle, Download } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
+import { CurrencyInput } from "@/components/ui/currency-input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { RequiredMark } from "@/components/ui/required-mark";
@@ -15,9 +16,9 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { StatusBadge } from "@/components/ui/status-badge";
-import { formatDateId, rupiah } from "@/lib/format";
+import { formatDateId } from "@/lib/format";
 import { renewMemberAction } from "./actions";
-import { membershipEndDate, membershipPrice, renewalStartDate, todayWib } from "./logic";
+import { membershipEndDate, packagePrice, renewalStartDate, todayWib } from "./logic";
 import { downloadMemberPdf } from "./member-pdf";
 import { MemberSearch } from "./member-search";
 import { STATUS_KIND } from "./members-page";
@@ -27,23 +28,19 @@ import {
   CATEGORY_LABELS,
   GENDER_LABELS,
   RenewMemberSchema,
-  type CategoryPrices,
   type MemberCard,
   type MemberCategory,
   type MemberSummary,
   type RenewMemberInput,
 } from "./validation";
 
-const PRICE_UNSET = "Harga belum diatur, hubungi superadmin.";
 const CATEGORIES = Object.entries(CATEGORY_LABELS).map(([value, label]) => ({ value, label }));
 
 export function RenewMemberForm({
   packages,
-  prices,
   initialMember,
 }: {
   packages: PackageOption[];
-  prices: CategoryPrices;
   initialMember: MemberSummary | null;
 }) {
   const [member, setMember] = useState<MemberSummary | null>(initialMember);
@@ -51,6 +48,7 @@ export function RenewMemberForm({
     initialMember?.category ?? null,
   );
   const [packageId, setPackageId] = useState<number | null>(null);
+  const [price, setPriceState] = useState<number | null>(null);
   const [payments, setPayments] = useState<PaymentRow[]>([{ method: "cash", amount: 0 }]);
   const [errors, setErrors] = useState<Record<string, string[]>>({});
   const [message, setMessage] = useState<string | null>(null);
@@ -60,28 +58,41 @@ export function RenewMemberForm({
   const [pending, startTransition] = useTransition();
 
   const pkg = packages.find((p) => p.id === packageId);
-  const base = category ? prices[category] : undefined;
-  const price = pkg && category ? membershipPrice(base, pkg.months) : null;
-  const priceUnset = !!pkg && !!category && price === null;
   const packageItems = packages.map((p) => ({ value: p.id, label: `${p.name} (${p.months} bulan)` }));
   const newStart = member ? renewalStartDate(member.endDate, todayWib()) : null;
   const newEnd = newStart && pkg ? membershipEndDate(newStart, pkg.months) : null;
 
-  // Status or Paket changed: payments collapse to one row of the new price.
+  // Status or Paket changed: Harga refills from the list (overwriting a typed one) and
+  // payments collapse to one row of it.
   function setPricing(next: { category?: MemberCategory | null; packageId?: number | null }) {
     const c = next.category !== undefined ? next.category : category;
     const id = next.packageId !== undefined ? next.packageId : packageId;
     if (next.category !== undefined) setCategory(c);
     if (next.packageId !== undefined) setPackageId(id);
-    const months = packages.find((p) => p.id === id)?.months;
-    const p = c && months ? membershipPrice(prices[c], months) : null;
+    const target = packages.find((p) => p.id === id);
+    const p = c && target ? packagePrice(target, c) : null;
+    setPriceState(p);
     if (p !== null) setPayments([{ method: "cash", amount: p }]);
+  }
+
+  // One payment row simply follows Harga; several rows stay as the kasir typed them.
+  function setPrice(p: number | null) {
+    setPriceState(p);
+    if (payments.length === 1) setPayments([{ ...payments[0], amount: p ?? 0 }]);
+  }
+
+  // A package deleted in the pop-up must not stay selected.
+  if (packageId !== null && !packages.some((p) => p.id === packageId)) {
+    setPackageId(null);
+    setPriceState(null);
+    setPayments([{ method: "cash", amount: 0 }]);
   }
 
   function pickMember(m: MemberSummary | null) {
     setMember(m);
     setCategory(m?.category ?? null);
     setPackageId(null);
+    setPriceState(null);
     setPayments([{ method: "cash", amount: 0 }]);
     setErrors({});
     setMessage(null);
@@ -96,7 +107,6 @@ export function RenewMemberForm({
   function submit() {
     if (pending || !member) return;
     setMessage(null);
-    if (priceUnset) return setErrors({ price: [PRICE_UNSET] });
     const input = {
       memberId: member.id,
       category: category ?? undefined,
@@ -107,8 +117,6 @@ export function RenewMemberForm({
     const r = RenewMemberSchema.safeParse(input);
     if (!r.success) {
       const errs = r.error.flatten().fieldErrors;
-      // Harga has no input of its own; "Paket wajib dipilih" already covers a missing price.
-      delete errs.price;
       return setErrors(errs);
     }
     setErrors({});
@@ -229,19 +237,25 @@ export function RenewMemberForm({
             )}
           </div>
           <div className="space-y-1.5">
-            <p className="text-sm font-medium">Harga</p>
-            <p className="text-2xl font-semibold">{price === null ? "-" : rupiah.format(price)}</p>
-            {(priceUnset || errors.price) && (
-              <p className="text-base text-destructive">{PRICE_UNSET}</p>
-            )}
+            <Label htmlFor="renew-price">
+              Harga
+              <RequiredMark />
+            </Label>
+            <CurrencyInput
+              id="renew-price"
+              className="h-11 text-base"
+              value={price === null ? "" : String(price)}
+              onChange={(raw) => setPrice(raw === "" ? null : Number(raw))}
+            />
+            {fieldError("price")}
           </div>
-          {price !== null && (
+          {packageId !== null && (
             <div className="space-y-1.5">
               <Label>
                 Pembayaran
                 <RequiredMark />
               </Label>
-              <PaymentRows price={price} value={payments} onChange={setPayments} />
+              <PaymentRows price={price ?? 0} value={payments} onChange={setPayments} />
               {fieldError("payments")}
             </div>
           )}
@@ -253,7 +267,7 @@ export function RenewMemberForm({
             </Alert>
           )}
 
-          <Button type="submit" size="xl" disabled={pending || priceUnset}>
+          <Button type="submit" size="xl" disabled={pending}>
             {pending ? "Menyimpan..." : "Perpanjang"}
           </Button>
         </>

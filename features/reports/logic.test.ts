@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   balances,
   byMethod,
+  cashBankLabel,
   costOfGoods,
   expensesTotal,
   goodsProfit,
@@ -15,6 +16,7 @@ import {
   profitPercent,
   recentTransactions,
   saleCostShares,
+  saleCount,
   salesDetail,
   splitWhole,
   transactionCount,
@@ -63,12 +65,21 @@ describe("saleCostShares", () => {
   });
 });
 
+describe("cashBankLabel", () => {
+  it("collapses methods to Cash / Bank", () => {
+    expect(cashBankLabel(["cash"])).toBe("Cash");
+    expect(cashBankLabel(["qris", "transfer"])).toBe("Bank");
+    expect(cashBankLabel(["transfer", "cash"])).toBe("Cash + Bank");
+    expect(cashBankLabel(["bank"])).toBe("Bank");
+    expect(cashBankLabel([])).toBe("-");
+  });
+});
+
 describe("method helpers", () => {
   it("methodOf / parseMethodFilter", () => {
     expect(methodOf("cash")).toBe("cash");
     expect(methodOf("qris")).toBe("bank");
     expect(methodOf("transfer")).toBe("bank");
-    expect(methodOf("debit")).toBe("bank");
     expect(parseMethodFilter("x")).toBe("all");
     expect(parseMethodFilter(undefined)).toBe("all");
     expect(parseMethodFilter("bank")).toBe("bank");
@@ -95,6 +106,15 @@ describe("report numbers", () => {
     expect(transactionCount(rows, "all")).toBe(2);
     expect(transactionCount(rows, "cash")).toBe(2);
     expect(transactionCount(rows, "bank")).toBe(1);
+  });
+  it("saleCount counts product sales only", () => {
+    expect(saleCount(rows, "all")).toBe(1);
+    expect(saleCount(rows, "cash")).toBe(1);
+    expect(saleCount(rows, "bank")).toBe(1);
+    const onlyMembership = [
+      mv({ direction: "in", kind: "membership", method: "cash", amount: 300000 }),
+    ];
+    expect(saleCount(onlyMembership, "all")).toBe(0);
   });
   it("profitPercent", () => {
     expect(profitPercent([], "all")).toBeNull();

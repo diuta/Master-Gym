@@ -9,7 +9,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { formatDateId, formatTimeWib, rupiah } from "@/lib/format";
-import type { IncomeKind, RecentTx } from "./logic";
+import { cashBankLabel, type IncomeKind, type RecentTx } from "./logic";
 
 const KIND_LABELS: Record<IncomeKind, string> = {
   sale: "Penjualan",
@@ -17,8 +17,6 @@ const KIND_LABELS: Record<IncomeKind, string> = {
   visit: "Visit",
   pt: "PT",
 };
-
-const METHOD_LABELS = { cash: "Cash", bank: "Bank" } as const;
 
 export function RecentTransactionsTable({ rows }: { rows: RecentTx[] }) {
   if (rows.length === 0) {
@@ -43,7 +41,7 @@ export function RecentTransactionsTable({ rows }: { rows: RecentTx[] }) {
             </TableCell>
             <TableCell>{KIND_LABELS[r.kind]}</TableCell>
             <TableCell className="font-medium">{r.label}</TableCell>
-            <TableCell>{r.methods.map((m) => METHOD_LABELS[m]).join(" + ")}</TableCell>
+            <TableCell>{cashBankLabel(r.methods)}</TableCell>
             <TableCell className="text-right">{rupiah.format(r.total)}</TableCell>
           </TableRow>
         ))}

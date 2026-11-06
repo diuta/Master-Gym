@@ -1,6 +1,6 @@
 # Spec Alignment, Piece 1 — Small Fixes: Design
 
-Date: 2026-11-04 · Status: approved (2026-11-04)
+Date: 2026-11-04 · Status: implemented (2026-11-04)
 
 Short design (small change). Part 1 of 5 of re-aligning the app with the original client spec "INFORMASI GENERAL APLIKASI GYM" (8 Oct 2026, outside the repo; summarised in [HANDOFF.md](../../HANDOFF.md) section 3). Order agreed with the user: (1) small fixes, (2) prices back to the kasir, (3) Corporate package, (4) navbar on top.
 

@@ -4,6 +4,7 @@ import { useState, useTransition } from "react";
 import { AlertCircle, Download, UserPlus } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
+import { CurrencyInput } from "@/components/ui/currency-input";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { RequiredMark } from "@/components/ui/required-mark";
@@ -29,8 +30,9 @@ import {
 } from "@/components/ui/wizard";
 import { formatDateId, rupiah } from "@/lib/format";
 import { registerMemberAction } from "./actions";
+import { KelolaPaketDialog } from "./kelola-paket-dialog";
 import { downloadMemberPdf } from "./member-pdf";
-import { membershipEndDate, membershipPrice, paymentsMatchPrice, todayWib } from "./logic";
+import { membershipEndDate, packagePrice, paymentsMatchPrice, todayWib } from "./logic";
 import { PaymentRows, type PaymentRow } from "./payment-rows";
 import type { PackageOption } from "./queries";
 import { WebcamCapture } from "./webcam-capture";
@@ -39,7 +41,6 @@ import {
   GENDER_LABELS,
   PAYMENT_METHOD_LABELS,
   RegisterMemberFields,
-  type CategoryPrices,
   type Gender,
   type MemberCard,
   type MemberCategory,
@@ -72,8 +73,6 @@ const STEP_SCHEMAS = {
 type StepKey = keyof typeof STEP_SCHEMAS;
 const STEP_ORDER: StepKey[] = ["personal", "photo", "package"];
 
-const PRICE_UNSET = "Harga belum diatur, hubungi superadmin.";
-
 const GENDERS = Object.entries(GENDER_LABELS).map(([value, label]) => ({ value, label }));
 const CATEGORIES = Object.entries(CATEGORY_LABELS).map(([value, label]) => ({ value, label }));
 
@@ -85,6 +84,7 @@ type FormState = {
   category: MemberCategory | null;
   photo: string | null;
   packageId: number | null;
+  price: number | null;
   startDate: string;
   payments: PaymentRow[];
 };
@@ -97,13 +97,14 @@ const emptyForm = (): FormState => ({
   category: null,
   photo: null,
   packageId: null,
+  price: null,
   // "" means today, resolved when read, so a tab left open overnight doesn't backdate.
   startDate: "",
   payments: [{ method: "cash", amount: 0 }],
 });
 
 // Missing values go to the schema as undefined so it reports "wajib diisi".
-function toInput(f: FormState, price: number | null): RegisterMemberInput {
+function toInput(f: FormState): RegisterMemberInput {
   return {
     name: f.name,
     phone: f.phone,
@@ -113,18 +114,12 @@ function toInput(f: FormState, price: number | null): RegisterMemberInput {
     photo: f.photo ?? "",
     packageId: f.packageId ?? undefined,
     startDate: f.startDate || todayWib(),
-    price: price ?? undefined,
+    price: f.price ?? undefined,
     payments: f.payments,
   } as RegisterMemberInput;
 }
 
-export function RegisterMemberWizard({
-  packages,
-  prices,
-}: {
-  packages: PackageOption[];
-  prices: CategoryPrices;
-}) {
+export function RegisterMemberWizard({ packages }: { packages: PackageOption[] }) {
   const wizard = useWizard(STEPS);
   const [form, setForm] = useState<FormState>(emptyForm);
   const [errors, setErrors] = useState<Record<string, string[]>>({});
@@ -137,36 +132,55 @@ export function RegisterMemberWizard({
   const set = <K extends keyof FormState>(key: K, value: FormState[K]) =>
     setForm((f) => ({ ...f, [key]: value }));
 
-  const priceOf = (f: Pick<FormState, "packageId" | "category">) => {
+  const listPrice = (f: Pick<FormState, "packageId" | "category">) => {
     const p = packages.find((x) => x.id === f.packageId);
-    return p && f.category ? membershipPrice(prices[f.category], p.months) : null;
+    return p && f.category ? packagePrice(p, f.category) : null;
   };
 
-  // Changing package or category collapses payments to one row of the new price.
+  // Changing package or category refills Harga from the list (overwriting a typed one)
+  // and collapses payments to one row of it.
   function setPricing(patch: Partial<Pick<FormState, "packageId" | "category">>) {
     setForm((f) => {
       const next = { ...f, ...patch };
-      const p = priceOf(next);
-      return p === null ? next : { ...next, payments: [{ method: "cash", amount: p }] };
+      const p = listPrice(next);
+      return {
+        ...next,
+        price: p,
+        payments: p === null ? next.payments : [{ method: "cash", amount: p }],
+      };
     });
   }
 
+  // One payment row simply follows Harga; several rows stay as the kasir typed them.
+  function setPrice(p: number | null) {
+    setForm((f) => ({
+      ...f,
+      price: p,
+      payments: f.payments.length === 1 ? [{ ...f.payments[0], amount: p ?? 0 }] : f.payments,
+    }));
+  }
+
+  // A package deleted in the pop-up must not stay selected.
+  if (form.packageId !== null && !packages.some((p) => p.id === form.packageId)) {
+    setForm((f) => ({
+      ...f,
+      packageId: null,
+      price: null,
+      payments: [{ method: "cash", amount: 0 }],
+    }));
+  }
+
   const pkg = packages.find((p) => p.id === form.packageId);
-  const priceOrNull = priceOf(form);
-  const price = priceOrNull ?? 0;
-  const priceUnset = pkg !== undefined && form.category !== null && priceOrNull === null;
+  const price = form.price ?? 0;
   const startDate = form.startDate || todayWib();
   const validStart = /^\d{4}-\d{2}-\d{2}$/.test(startDate);
   const endDate = pkg && validStart ? membershipEndDate(startDate, pkg.months) : null;
   const packageItems = packages.map((p) => ({ value: p.id, label: `${p.name} (${p.months} bulan)` }));
 
   function validateStep(key: StepKey): boolean {
-    const input = toInput(form, priceOrNull);
+    const input = toInput(form);
     const r = STEP_SCHEMAS[key].safeParse(input);
     const errs: Record<string, string[]> = r.success ? {} : r.error.flatten().fieldErrors;
-    // Harga has no input of its own; "Paket wajib dipilih" already covers a missing price.
-    delete errs.price;
-    if (priceUnset) errs.price = [PRICE_UNSET];
     if (key === "package" && !errs.payments && !paymentsMatchPrice(form.payments, price)) {
       errs.payments = ["Total pembayaran harus sama dengan harga."];
     }
@@ -178,7 +192,7 @@ export function RegisterMemberWizard({
     setMessage(null);
     startTransition(async () => {
       try {
-        const result = await registerMemberAction(toInput(form, priceOrNull));
+        const result = await registerMemberAction(toInput(form));
         if (result.success) {
           setCard(result.data);
           return;
@@ -366,6 +380,10 @@ export function RegisterMemberWizard({
                 </SelectContent>
               </Select>
               {fieldError("packageId")}
+              {/* The pop-up is a portal; stop its Enter presses from advancing the wizard. */}
+              <div onKeyDown={(e) => e.stopPropagation()}>
+                <KelolaPaketDialog packages={packages} />
+              </div>
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="member-start">
@@ -388,13 +406,19 @@ export function RegisterMemberWizard({
               {fieldError("startDate")}
             </div>
             <div className="space-y-1.5">
-              <p className="text-sm font-medium">Harga</p>
-              <p className="text-2xl font-semibold">
-                {priceOrNull === null ? "-" : rupiah.format(priceOrNull)}
-              </p>
-              {priceUnset && <p className="text-base text-destructive">{PRICE_UNSET}</p>}
+              <Label htmlFor="member-price">
+                Harga
+                <RequiredMark />
+              </Label>
+              <CurrencyInput
+                id="member-price"
+                className="h-11 text-base"
+                value={form.price === null ? "" : String(form.price)}
+                onChange={(raw) => setPrice(raw === "" ? null : Number(raw))}
+              />
+              {fieldError("price")}
             </div>
-            {priceOrNull !== null && (
+            {form.packageId !== null && (
               <div className="space-y-1.5">
                 <Label>
                   Pembayaran
