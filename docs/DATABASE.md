@@ -190,6 +190,8 @@ Enums `stock_movement_type` (`initial`, `purchase`, `sale`, `purchase_cancel`, `
 
 **Deactivate, not delete:** deleting a product, product category, supplier or expense category that is referenced only sets `is_active = false`; unused ones are really deleted. A product with stock > 0 can't be deleted. Creating a name that matches an inactive row reactivates that row. Old documents keep the copied names.
 
+**Indexes** (besides primary keys and unique columns): `visits.created_at`, `check_ins.checked_in_at`, `check_ins.member_id`, `sales.date`, `sale_items.sale_id`, `purchases.date`, `purchase_items.purchase_id`, `stock_movements.product_id`, `expenses.date`, `payments.sale_id`, `payments.purchase_id`. Unique: `users.email`, `members.member_no`, `members.phone`, `members.qr_token`, `product_categories.name`, `suppliers.name`, `expense_categories.name`, `sales.invoice_no`, `purchases.invoice_no`.
+
 ## 3. Connecting
 
 | Who connects | How |
@@ -204,7 +206,7 @@ Enums `stock_movement_type` (`initial`, `purchase`, `sale`, `purchase_cancel`, `
 
 | Setup | Port | `DATABASE_URL` |
 |---|---|---|
-| Native PostgreSQL 16 on Windows (service `postgresql-x64-16`) | 5432 | `postgres://mastergym:mastergym@localhost:5432/mastergym` |
+| Native PostgreSQL 16 (macOS: Homebrew `postgresql@16`; old Windows PC: service `postgresql-x64-16`) | 5432 | `postgres://mastergym:mastergym@localhost:5432/mastergym` |
 | Docker (`docker compose up -d postgres`) | 5434 on `127.0.0.1` only | `postgres://mastergym:mastergym@localhost:5434/mastergym` |
 | Inside the Docker network (app container → db container) | 5432 | `postgres://mastergym:mastergym@postgres:5432/mastergym` (set in `docker-compose.yml`) |
 

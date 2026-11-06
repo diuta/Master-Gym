@@ -23,7 +23,7 @@ compose project "master-gym-dev"
 
 ## 2. How the image is built (`Dockerfile`)
 
-All stages use `node:20-alpine`.
+All stages use `node:20-alpine`, which ships **npm 10**. Node 20 is past end-of-life (April 2026); upgrade the base image before launch. Generate `package-lock.json` with npm 10 too, or `npm ci` below fails (see [HANDOFF.md](./HANDOFF.md) section 5).
 
 1. **deps:** copies `package.json` + `package-lock.json` and runs `npm ci` (exact versions from the lockfile).
 2. **builder:** copies the code and runs `npm run build`. It sets **placeholder** `DATABASE_URL`, `SESSION_SECRET` and `NEXT_SERVER_ACTIONS_ENCRYPTION_KEY` only so the build doesn't crash on the startup checks. They are not used at runtime. Creates `public/` if it's missing (the app has none) so the next stage's copy works.
@@ -33,19 +33,19 @@ The real secrets come from the compose file's `environment:` at runtime.
 
 ## 3. Development
 
-Docker Desktop must be running ("Engine running"). It doesn't start with Windows.
+Docker Desktop must be running ("Engine running"). It may not start on login; open it first.
 
-```bash
-docker compose up -d --build          # build and start both containers
-docker compose ps                     # status; postgres should say "healthy"
-docker compose logs app --tail 50     # app logs
-docker compose down                   # stop (data stays in the volume)
-docker compose down -v                # stop AND delete the database volume (all data gone)
-```
+| Command | Does |
+|---|---|
+| `docker compose up -d --build` | Build and start both containers |
+| `docker compose ps` | Status; postgres should say "healthy" |
+| `docker compose logs app --tail 50` | App logs |
+| `docker compose down` | Stop (data stays in the volume) |
+| `docker compose down -v` | Stop **and delete the database volume** (all data gone) |
 
 The app waits for Postgres to pass its health check (`pg_isready`) before starting.
 
-**Fill the container database** (it starts empty). `.env` points at the native Postgres, so override the URL for these commands:
+**Fill the container database** (it starts empty). `.env.example` already points at the Docker Postgres on port 5434, so with an unchanged `.env` you can run `npm run db:push` and `npm run db:seed`. If your `.env` points at a native Postgres instead, override the URL:
 
 ```bash
 DATABASE_URL=postgres://mastergym:mastergym@localhost:5434/mastergym npx drizzle-kit push
@@ -58,8 +58,15 @@ You can also run only the database in Docker and the app with `npm run dev`: `do
 
 ## 4. Production
 
+Copy the template, then fill `DB_PASSWORD`, `SESSION_SECRET` and `NEXT_SERVER_ACTIONS_ENCRYPTION_KEY` in `.env.production`:
+
 ```bash
-cp .env.production.example .env.production   # fill DB_PASSWORD, SESSION_SECRET, NEXT_SERVER_ACTIONS_ENCRYPTION_KEY
+cp .env.production.example .env.production
+```
+
+Then build and start:
+
+```bash
 docker compose -f docker-compose.prod.yml --env-file .env.production up -d --build
 ```
 
@@ -75,7 +82,8 @@ Not set up yet: HTTPS / reverse proxy, and backups of the `postgres_data` and `u
 
 | Problem | Fix |
 |---|---|
-| `Docker Desktop is unable to start`, or stuck on "Starting the Docker Engine" | Quit Docker Desktop completely, run `wsl --shutdown`, start it again. If that fails, `wsl --update` in an admin terminal and restart the PC |
+| (Windows) `Docker Desktop is unable to start`, or stuck on "Starting the Docker Engine" | Quit Docker Desktop completely, run `wsl --shutdown`, start it again. If that fails, `wsl --update` in an admin terminal and restart the PC |
 | Port 3002 or 5434 already in use | Change `APP_HOST_PORT` / `DB_HOST_PORT` in `.env` |
 | App container exits immediately | `docker compose logs app`. Usually `SESSION_SECRET` is missing or shorter than 32 characters in `.env` |
 | Login says wrong password in Docker but works with `npm run dev` | The Docker database is separate and empty; seed it (section 3) |
+| `npm ci` fails in the `deps` stage with missing `@esbuild/*` entries | The lockfile was written by npm 11. Restore it (`git checkout package-lock.json`) or regenerate it with npm 10 (HANDOFF section 5) |

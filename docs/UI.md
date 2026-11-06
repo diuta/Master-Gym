@@ -95,7 +95,7 @@ These are **shadcn/ui** components (`base-nova` style, built on **Base UI**). Th
 | `empty-state.tsx` | Icon + title + description for "nothing here" |
 | `status-badge.tsx` | Coloured badge with icon + text for statuses: `success`, `cancelled`, `paid`, `unpaid`, `out_of_stock`, `low_stock`, `in_stock`. Membership: `member_active`, `member_expiring`, `member_expired` (Aktif / Habis ≤ 7 Hari / Sudah Habis). Attendance: `member`, `visitor`, `corporate` (Member / Visitor / Corporate, Building2 icon). Add new statuses here |
 | `lib/format.ts` (not in `ui/`) | `rupiah` (an `Intl.NumberFormat` giving "Rp150.000") and `formatDateId("2026-10-28")` (Indonesian date). Use these instead of formatting money or dates by hand |
-| `sortable-th.tsx` | A table header cell that sorts on click. Use with `hooks/use-sort.ts` |
+| `sortable-th.tsx` | A table header cell that sorts on click. Use with `hooks/use-sort.ts` (Data Member, Inventori) |
 | `required-mark.tsx` | The red `*` after a required field's label |
 | `features/reports/stat-tile.tsx` (`StatTile`) | A big-number tile: icon, label, value, optional hint. Used on Dashboard, Home and Laporan |
 | `features/reports/dashboard-card.tsx` (`DashboardCard`) | Card with icon + title + optional description around a table panel on those pages |

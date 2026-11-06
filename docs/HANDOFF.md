@@ -161,6 +161,8 @@ Days 2, 3, 4 and 5 are built, and spec alignment piece 1 was added and browser-c
   - Invoice numbers can skip after a failed save (the sequence isn't rolled back).
   - Cancelling a sale of a since-deactivated product restores its stock to the hidden product.
 - Impossible dates such as `2026-02-31` in the URL roll over to the next month.
+- The member PDF uses jsPDF's built-in Helvetica, which only renders Latin-1 names (shortcut in `member-pdf.ts`; embed a font if non-Latin names appear).
+- The Dockerfile uses `node:20-alpine`. Node 20 reached end-of-life in April 2026; move to Node 22 or 24 before launch (and re-check which npm the image ships, see the lockfile note above).
 - No pagination in Data Member, Visitor list or attendance (shortcut; add it if lists get long).
 - Orphan photo files are kept when a member's photo is replaced (shortcut).
 - The real logo and colours are pending (send the logo → update `app/globals.css` and the "M" badge in `components/app-navbar.tsx`).
@@ -170,9 +172,9 @@ Days 2, 3, 4 and 5 are built, and spec alignment piece 1 was added and browser-c
 
 ## 6. Set up on a new PC
 
-1. Install **Node 20+**, **PostgreSQL 16** (same major version as Sembako) and optionally **Docker Desktop**.
-   - Docker Desktop on Windows needs WSL2. If it hangs on "Starting the Docker Engine", quit it fully, run `wsl --shutdown`, and start it again.
-   - Docker Desktop doesn't start with Windows; open it before running `docker compose`.
+1. Install **Node 20+** with **npm 10** (`npm install -g npm@10` if `npm -v` says 11, see section 5), **PostgreSQL 16** (same major version as Sembako) and optionally **Docker Desktop**. On macOS, Homebrew works for Node (`brew install node`) and Docker Desktop.
+   - Windows only: Docker Desktop needs WSL2. If it hangs on "Starting the Docker Engine", quit it fully, run `wsl --shutdown`, and start it again.
+   - Docker Desktop may not start on login; open it before running `docker compose`.
 2. Get the code, check out the working branch, then run `npm ci`.
 3. `cp .env.example .env`, then fill `SESSION_SECRET` and `NEXT_SERVER_ACTIONS_ENCRYPTION_KEY` (`openssl rand -base64 32` each).
 4. Database. Choose one:
@@ -183,7 +185,7 @@ Days 2, 3, 4 and 5 are built, and spec alignment piece 1 was added and browser-c
 
 ## 7. Day 2: member registration (done, kept for reference)
 
-Build order for the remaining days: **day 2** members → **day 3** check-in, attendance, renewal, visit, PT add-on → **day 4** inventory, sales, purchases, expenses (copied from Sembako) → **day 5** dashboards and reports, then testing with the real scanner. Each day has its own section below (scope, questions to ask first, and when it counts as done). The deadline is end of October, so scope may need cutting. Ask the user.
+Build order for the remaining days: **day 2** members → **day 3** check-in, attendance, renewal, visit, PT add-on → **day 4** inventory, sales, purchases, expenses (copied from Sembako) → **day 5** dashboards and reports, then testing with the real scanner. Each day has its own section below (scope, questions to ask first, and when it counts as done). The deadline was pushed back on 2026-10-28 (section 1), so the full plan is kept; ask the user before cutting scope.
 
 **How to work each day:** ask that day's open questions first (rule 3) → build in `features/<domain>/` following Sembako → run `npm run lint` and `npm run build` → test in the browser as the right role → update this file's "Current state" and the other docs → tell the user it's ready to commit (never commit yourself).
 
