@@ -3,7 +3,7 @@ import { normalizePhone, paymentsMatchPrice, todayWib } from "./logic";
 import type { MembershipStatus } from "./logic";
 
 export type { MembershipStatus };
-export type PaymentMethod = "cash" | "qris" | "transfer" | "debit";
+export type PaymentMethod = "cash" | "qris" | "transfer";
 export type MemberCategory = "pelajar" | "mahasiswa" | "umum";
 export type Gender = "male" | "female";
 export type MemberCard = {
@@ -28,28 +28,26 @@ export const PAYMENT_METHOD_LABELS: Record<PaymentMethod, string> = {
   cash: "Cash",
   qris: "QRIS",
   transfer: "Transfer",
-  debit: "Debit",
 };
 
-const price = (label: string) =>
-  z.number({ error: `${label} wajib diisi.` }).int().min(1, { error: `${label} minimal Rp1.` });
+export const price = (label: string) =>
+  z
+    .number({ error: `${label} wajib diisi.` })
+    .int()
+    .min(1, { error: `${label} minimal Rp1.` })
+    .max(999_999_999_999, { error: `${label} maksimal Rp999.999.999.999.` });
 
 export const PackageSchema = z.object({
   name: z.string().trim().min(1, { error: "Nama paket wajib diisi." }).max(100, { error: "Nama paket maksimal 100 karakter." }),
   months: z.number({ error: "Durasi wajib diisi." }).int().min(1, { error: "Durasi minimal 1 bulan." }).max(60, { error: "Durasi maksimal 60 bulan." }),
+  pricePelajar: price("Harga pelajar"),
+  priceMahasiswa: price("Harga mahasiswa"),
+  priceUmum: price("Harga umum"),
 });
 export type PackageInput = z.input<typeof PackageSchema>;
 
-export type CategoryPrices = Partial<Record<MemberCategory, number>>;
-export const CategoryPricesSchema = z.object({
-  pelajar: price("Harga pelajar"),
-  mahasiswa: price("Harga mahasiswa"),
-  umum: price("Harga umum"),
-});
-export type CategoryPricesInput = z.input<typeof CategoryPricesSchema>;
-
 const name = z.string().trim().min(1, { error: "Nama wajib diisi." }).max(100, { error: "Nama maksimal 100 karakter." });
-const phone = z
+export const phone = z
   .string()
   .transform((v, ctx) => {
     const p = normalizePhone(v);
@@ -68,7 +66,7 @@ const photo = z.string().startsWith("data:image/", { error: "Foto wajib diambil.
 const payments = z
   .array(
     z.object({
-      method: z.enum(["cash", "qris", "transfer", "debit"], { error: "Metode pembayaran tidak valid." }),
+      method: z.enum(["cash", "qris", "transfer"], { error: "Metode pembayaran tidak valid." }),
       amount: z.number({ error: "Jumlah wajib diisi." }).int().min(1, { error: "Jumlah minimal Rp1." }),
     }),
   )
@@ -76,7 +74,7 @@ const payments = z
 export const PaymentsSchema = payments;
 
 // Shared by every schema that takes money: rows must add up to the price exactly.
-function checkPayments(v: { payments: { amount: number }[]; price: number }, ctx: z.RefinementCtx) {
+export function checkPayments(v: { payments: { amount: number }[]; price: number }, ctx: z.RefinementCtx) {
   if (!paymentsMatchPrice(v.payments, v.price)) {
     ctx.addIssue({ code: "custom", path: ["payments"], message: "Total pembayaran harus sama dengan harga." });
   }
@@ -112,7 +110,7 @@ export const UpdateMemberSchema = z.object({
 export type UpdateMemberInput = z.input<typeof UpdateMemberSchema>;
 
 const memberId = z.number({ error: "Member wajib dipilih." }).int();
-const lockerNo = z
+export const lockerNo = z
   .string()
   .trim()
   .max(20, { error: "Nomor loker maksimal 20 karakter." })
@@ -131,6 +129,12 @@ export const CheckInSchema = z
     }
   });
 export type CheckInInput = z.input<typeof CheckInSchema>;
+
+export const CheckOutSchema = z.object({
+  kind: z.enum(["member", "visitor", "corporate"]),
+  id: z.number().int().positive(),
+});
+export type CheckOutInput = z.input<typeof CheckOutSchema>;
 
 export const VisitSchema = z
   .object({ name, phone, lockerNo, price: price("Harga"), payments })
@@ -152,6 +156,11 @@ export const PtPurchaseSchema = z
   .object({
     memberId,
     ptProgramId: z.number({ error: "Program PT wajib dipilih." }).int(),
+    sessions: z
+      .number({ error: "Sesi wajib diisi." })
+      .int()
+      .min(1, { error: "Sesi minimal 1." })
+      .max(200, { error: "Sesi maksimal 200." }),
     price: price("Harga"),
     payments,
   })
@@ -190,12 +199,15 @@ export type MemberSummary = {
 };
 
 export type AttendanceRow = {
-  kind: "member" | "visitor";
+  kind: "member" | "visitor" | "corporate";
+  id: number;
   at: Date;
+  checkedOutAt: Date | null;
   name: string;
   memberNo: string | null;
   lockerNo: string | null;
   trainerName: string | null;
+  companyName: string | null;
 };
 
 export type ActionResult<T = undefined> =

@@ -9,7 +9,7 @@ import type { AttendanceRow } from "./validation";
 
 export function AttendancePage({ date, rows }: { date: string; rows: AttendanceRow[] }) {
   const router = useRouter();
-  const members = rows.filter((r) => r.kind === "member").length;
+  const count = (kind: AttendanceRow["kind"]) => rows.filter((r) => r.kind === kind).length;
 
   return (
     <div className="space-y-6">
@@ -25,7 +25,8 @@ export function AttendancePage({ date, rows }: { date: string; rows: AttendanceR
         />
       </div>
       <p className="text-base text-muted-foreground">
-        {rows.length} orang ({members} member, {rows.length - members} visitor)
+        {rows.length} orang ({count("member")} member, {count("visitor")} visitor,{" "}
+        {count("corporate")} corporate)
       </p>
       {rows.length === 0 ? (
         <EmptyState

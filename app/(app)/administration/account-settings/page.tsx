@@ -1,7 +1,7 @@
 import { requireRole } from "@/lib/auth/dal";
-import { PlaceholderPage } from "@/components/placeholder-page";
+import { AccountSettingsPage } from "@/features/administration/account-settings-page";
 
 export default async function Page() {
   await requireRole("superadmin");
-  return <PlaceholderPage title="Pengaturan Akun" />;
+  return <AccountSettingsPage />;
 }

@@ -37,22 +37,17 @@ export const paymentMethodEnum = pgEnum("payment_method", [
   "cash",
   "qris",
   "transfer",
-  "debit",
 ]);
 
 export const memberNoSeq = pgSequence("member_no_seq");
-
-// Monthly base price per category; a membership costs this × package months.
-export const categoryPrices = pgTable("category_prices", {
-  category: memberCategoryEnum("category").primaryKey(),
-  pricePerMonth: decimal("price_per_month", { precision: 14, scale: 2 }).notNull(),
-  updatedAt: timestamp("updated_at").notNull().defaultNow(),
-});
 
 export const packages = pgTable("packages", {
   id: bigserial("id", { mode: "number" }).primaryKey(),
   name: varchar("name", { length: 100 }).notNull(),
   months: integer("months").notNull(),
+  pricePelajar: decimal("price_pelajar", { precision: 14, scale: 2 }).notNull(),
+  priceMahasiswa: decimal("price_mahasiswa", { precision: 14, scale: 2 }).notNull(),
+  priceUmum: decimal("price_umum", { precision: 14, scale: 2 }).notNull(),
   isActive: boolean("is_active").notNull().default(true),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
@@ -101,6 +96,19 @@ export const visitPrice = pgTable(
   (t) => [check("visit_price_single_row", sql`${t.id} = 1`)],
 );
 
+// One row only (id = 1): cash/bank on hand as of asOf; reports add movements from that date on.
+export const openingBalance = pgTable(
+  "opening_balance",
+  {
+    id: integer("id").primaryKey().default(1),
+    cash: decimal("cash", { precision: 14, scale: 2 }).notNull(),
+    bank: decimal("bank", { precision: 14, scale: 2 }).notNull(),
+    asOf: date("as_of", { mode: "string" }).notNull(),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (t) => [check("opening_balance_single_row", sql`${t.id} = 1`)],
+);
+
 export const trainers = pgTable("trainers", {
   id: bigserial("id", { mode: "number" }).primaryKey(),
   name: varchar("name", { length: 100 }).notNull(),
@@ -145,6 +153,7 @@ export const visits = pgTable(
     price: decimal("price", { precision: 14, scale: 2 }).notNull(),
     lockerNo: varchar("locker_no", { length: 20 }),
     createdAt: timestamp("created_at").notNull().defaultNow(),
+    checkedOutAt: timestamp("checked_out_at"),
   },
   (t) => [index("visits_created_at_idx").on(t.createdAt)],
 );
@@ -160,10 +169,57 @@ export const checkIns = pgTable(
     // Set when the member used a PT session on this visit.
     trainerId: bigint("trainer_id", { mode: "number" }).references(() => trainers.id),
     checkedInAt: timestamp("checked_in_at").notNull().defaultNow(),
+    checkedOutAt: timestamp("checked_out_at"),
   },
   (t) => [
     index("check_ins_checked_in_at_idx").on(t.checkedInAt),
     index("check_ins_member_id_idx").on(t.memberId),
+  ],
+);
+
+export const corporatePackages = pgTable("corporate_packages", {
+  id: bigserial("id", { mode: "number" }).primaryKey(),
+  companyName: varchar("company_name", { length: 100 }).notNull(),
+  employeeCount: integer("employee_count").notNull(),
+  visitQuota: integer("visit_quota").notNull(),
+  months: integer("months").notNull(),
+  price: decimal("price", { precision: 14, scale: 2 }).notNull(),
+  isActive: boolean("is_active").notNull().default(true),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+export const corporatePurchases = pgTable("corporate_purchases", {
+  id: bigserial("id", { mode: "number" }).primaryKey(),
+  corporatePackageId: bigint("corporate_package_id", { mode: "number" })
+    .notNull()
+    .references(() => corporatePackages.id),
+  // Copied from the package at purchase time so later package edits don't rewrite history.
+  companyName: varchar("company_name", { length: 100 }).notNull(),
+  employeeCount: integer("employee_count").notNull(),
+  visitQuota: integer("visit_quota").notNull(),
+  price: decimal("price", { precision: 14, scale: 2 }).notNull(),
+  startDate: date("start_date", { mode: "string" }).notNull(),
+  endDate: date("end_date", { mode: "string" }).notNull(),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export const corporateCheckIns = pgTable(
+  "corporate_check_ins",
+  {
+    id: bigserial("id", { mode: "number" }).primaryKey(),
+    corporatePurchaseId: bigint("corporate_purchase_id", { mode: "number" })
+      .notNull()
+      .references(() => corporatePurchases.id),
+    employeeName: varchar("employee_name", { length: 100 }).notNull(),
+    phone: varchar("phone", { length: 20 }),
+    lockerNo: varchar("locker_no", { length: 20 }),
+    checkedInAt: timestamp("checked_in_at").notNull().defaultNow(),
+    checkedOutAt: timestamp("checked_out_at"),
+  },
+  (t) => [
+    index("corporate_check_ins_checked_in_at_idx").on(t.checkedInAt),
+    index("corporate_check_ins_purchase_id_idx").on(t.corporatePurchaseId),
   ],
 );
 
@@ -223,6 +279,8 @@ export const sales = pgTable(
     total: decimal("total", { precision: 14, scale: 2 }).notNull(),
     status: transactionStatusEnum("status").notNull().default("success"),
     cancelledAt: timestamp("cancelled_at"),
+    // Nullable: sales saved before this column existed have no recorded cashier.
+    createdBy: bigint("created_by", { mode: "number" }).references(() => users.id),
     createdAt: timestamp("created_at").notNull().defaultNow(),
     updatedAt: timestamp("updated_at").notNull().defaultNow(),
   },
@@ -259,6 +317,7 @@ export const purchases = pgTable(
       .notNull()
       .references(() => suppliers.id),
     supplierName: varchar("supplier_name", { length: 100 }).notNull(),
+    supplierInvoiceNo: varchar("supplier_invoice_no", { length: 50 }),
     date: date("date", { mode: "string" }).notNull(),
     notes: varchar("notes", { length: 255 }),
     total: decimal("total", { precision: 14, scale: 2 }).notNull(),
@@ -347,14 +406,17 @@ export const payments = pgTable(
     ),
     saleId: bigint("sale_id", { mode: "number" }).references(() => sales.id),
     purchaseId: bigint("purchase_id", { mode: "number" }).references(() => purchases.id),
+    corporatePurchaseId: bigint("corporate_purchase_id", { mode: "number" }).references(
+      () => corporatePurchases.id,
+    ),
     method: paymentMethodEnum("method").notNull(),
     amount: decimal("amount", { precision: 14, scale: 2 }).notNull(),
     paidAt: timestamp("paid_at").notNull().defaultNow(),
   },
   (t) => [
     check(
-      "payments_exactly_one_link",
-      sql`num_nonnulls(${t.membershipId}, ${t.visitId}, ${t.ptPurchaseId}, ${t.saleId}, ${t.purchaseId}) = 1`,
+      "payments_one_link_v3",
+      sql`num_nonnulls(${t.membershipId}, ${t.visitId}, ${t.ptPurchaseId}, ${t.saleId}, ${t.purchaseId}, ${t.corporatePurchaseId}) = 1`,
     ),
     index("payments_sale_id_idx").on(t.saleId),
     index("payments_purchase_id_idx").on(t.purchaseId),

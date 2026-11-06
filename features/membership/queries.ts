@@ -2,8 +2,9 @@ import "server-only";
 import { and, asc, count, desc, eq, gte, ilike, lt, max, min, or, sql } from "drizzle-orm";
 import { db } from "@/lib/db";
 import {
-  categoryPrices,
   checkIns,
+  corporateCheckIns,
+  corporatePurchases,
   members,
   memberships,
   packages,
@@ -17,7 +18,6 @@ import { formatTimeWib } from "@/lib/format";
 import { daysRemaining, membershipStatus, normalizePhone, todayWib, wibDayRange } from "./logic";
 import type {
   AttendanceRow,
-  CategoryPrices,
   Gender,
   MemberCard,
   MemberCategory,
@@ -29,19 +29,25 @@ export type PackageOption = {
   id: number;
   name: string;
   months: number;
+  prices: Record<MemberCategory, number>;
 };
 
 export async function listActivePackages(): Promise<PackageOption[]> {
-  return db
-    .select({ id: packages.id, name: packages.name, months: packages.months })
+  const rows = await db
+    .select()
     .from(packages)
     .where(eq(packages.isActive, true))
     .orderBy(asc(packages.months), asc(packages.name));
-}
-
-export async function getCategoryPrices(): Promise<CategoryPrices> {
-  const rows = await db.select().from(categoryPrices);
-  return Object.fromEntries(rows.map((r) => [r.category, Number(r.pricePerMonth)]));
+  return rows.map((r) => ({
+    id: r.id,
+    name: r.name,
+    months: r.months,
+    prices: {
+      pelajar: Number(r.pricePelajar),
+      mahasiswa: Number(r.priceMahasiswa),
+      umum: Number(r.priceUmum),
+    },
+  }));
 }
 
 export async function getVisitPrice(): Promise<number | null> {
@@ -231,10 +237,12 @@ export async function searchMembers(text: string): Promise<MemberSummary[]> {
 
 export async function listAttendance(date: string): Promise<AttendanceRow[]> {
   const { start, end } = wibDayRange(date);
-  const [memberRows, visitRows] = await Promise.all([
+  const [memberRows, visitRows, corporateRows] = await Promise.all([
     db
       .select({
+        id: checkIns.id,
         at: checkIns.checkedInAt,
+        checkedOutAt: checkIns.checkedOutAt,
         name: members.name,
         memberNo: members.memberNo,
         lockerNo: checkIns.lockerNo,
@@ -245,14 +253,49 @@ export async function listAttendance(date: string): Promise<AttendanceRow[]> {
       .leftJoin(trainers, eq(trainers.id, checkIns.trainerId))
       .where(and(gte(checkIns.checkedInAt, start), lt(checkIns.checkedInAt, end))),
     db
-      .select({ at: visits.createdAt, name: visits.name, lockerNo: visits.lockerNo })
+      .select({
+        id: visits.id,
+        at: visits.createdAt,
+        checkedOutAt: visits.checkedOutAt,
+        name: visits.name,
+        lockerNo: visits.lockerNo,
+      })
       .from(visits)
       .where(and(gte(visits.createdAt, start), lt(visits.createdAt, end))),
+    db
+      .select({
+        id: corporateCheckIns.id,
+        at: corporateCheckIns.checkedInAt,
+        checkedOutAt: corporateCheckIns.checkedOutAt,
+        name: corporateCheckIns.employeeName,
+        lockerNo: corporateCheckIns.lockerNo,
+        companyName: corporatePurchases.companyName,
+      })
+      .from(corporateCheckIns)
+      .innerJoin(
+        corporatePurchases,
+        eq(corporatePurchases.id, corporateCheckIns.corporatePurchaseId),
+      )
+      .where(
+        and(gte(corporateCheckIns.checkedInAt, start), lt(corporateCheckIns.checkedInAt, end)),
+      ),
   ]);
 
   return [
-    ...memberRows.map((r) => ({ kind: "member" as const, ...r })),
-    ...visitRows.map((r) => ({ kind: "visitor" as const, ...r, memberNo: null, trainerName: null })),
+    ...memberRows.map((r) => ({ kind: "member" as const, ...r, companyName: null })),
+    ...visitRows.map((r) => ({
+      kind: "visitor" as const,
+      ...r,
+      memberNo: null,
+      trainerName: null,
+      companyName: null,
+    })),
+    ...corporateRows.map((r) => ({
+      kind: "corporate" as const,
+      ...r,
+      memberNo: null,
+      trainerName: null,
+    })),
   ].sort((a, b) => b.at.getTime() - a.at.getTime());
 }
 

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   daysRemaining, formatMemberNo, membershipEndDate, membershipStatus,
-  membershipPrice, normalizePhone, paymentsMatchPrice, renewalStartDate, todayWib, wibDayRange,
+  normalizePhone, packagePrice, paymentsMatchPrice, renewalStartDate, todayWib, wibDayRange,
 } from "./logic";
 
 describe("todayWib", () => {
@@ -53,10 +53,10 @@ describe("normalizePhone", () => {
   );
 });
 
-describe("membershipPrice", () => {
-  it("multiplies the monthly base by months, null when unset", () => {
-    expect(membershipPrice(200000, 3)).toBe(600000);
-    expect(membershipPrice(undefined, 3)).toBeNull();
+describe("packagePrice", () => {
+  it("picks the package price for the member status", () => {
+    const pkg = { prices: { pelajar: 150000, mahasiswa: 175000, umum: 200000 } };
+    expect(packagePrice(pkg, "mahasiswa")).toBe(175000);
   });
 });
 

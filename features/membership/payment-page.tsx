@@ -9,11 +9,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import type { CorporatePackageOption } from "@/features/corporate/queries";
 import { PtAddonForm } from "./pt-addon-form";
-import type { PackageOption, PtProgramOption } from "./queries";
+import type { PackageOption, PtProgramOption, TrainerOption } from "./queries";
 import { RegisterMemberWizard } from "./register-member-wizard";
 import { RenewMemberForm } from "./renew-member-form";
-import type { CategoryPrices, MemberSummary } from "./validation";
+import type { MemberSummary } from "./validation";
 import { VisitForm } from "./visit-form";
 
 export type PaymentForm = "new" | "visit" | "renew" | "addon";
@@ -28,16 +29,18 @@ const PAYMENT_TYPES: { value: PaymentForm; label: string }[] = [
 export function PaymentPage({
   form,
   packages,
-  prices,
   visitPrice,
   ptPrograms,
+  trainers,
+  corporatePackages,
   member,
 }: {
   form: PaymentForm;
   packages: PackageOption[];
-  prices: CategoryPrices;
   visitPrice: number | null;
   ptPrograms: PtProgramOption[];
+  trainers: TrainerOption[];
+  corporatePackages: CorporatePackageOption[];
   member: MemberSummary | null;
 }) {
   const router = useRouter();
@@ -66,18 +69,23 @@ export function PaymentPage({
         </Select>
       </div>
 
-      {form === "new" && <RegisterMemberWizard packages={packages} prices={prices} />}
+      {form === "new" && <RegisterMemberWizard packages={packages} />}
       {form === "visit" && <VisitForm price={visitPrice} />}
       {form === "renew" && (
         <RenewMemberForm
           key={member?.id ?? "none"}
           packages={packages}
-          prices={prices}
           initialMember={member}
         />
       )}
       {form === "addon" && (
-        <PtAddonForm key={member?.id ?? "none"} programs={ptPrograms} initialMember={member} />
+        <PtAddonForm
+          key={member?.id ?? "none"}
+          programs={ptPrograms}
+          trainers={trainers}
+          corporatePackages={corporatePackages}
+          initialMember={member}
+        />
       )}
     </div>
   );

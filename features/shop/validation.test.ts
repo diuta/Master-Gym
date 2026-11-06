@@ -93,3 +93,17 @@ describe("wizard step picks", () => {
     expect(PurchaseFields.pick({ date: true, notes: true }).safeParse(purchase).success).toBe(true);
   });
 });
+
+describe("PurchaseSchema supplierInvoiceNo", () => {
+  const parse = (v?: string) =>
+    PurchaseSchema.safeParse(v === undefined ? purchase : { ...purchase, supplierInvoiceNo: v });
+  it("accepts a missing value", () => expect(parse().success).toBe(true));
+  it("trims the value", () => expect(parse(" INV/123 ").data?.supplierInvoiceNo).toBe("INV/123"));
+  it("turns empty into null", () => expect(parse("").data?.supplierInvoiceNo).toBeNull());
+  it("rejects 51 characters", () => {
+    const r = parse("x".repeat(51));
+    expect(r.error?.issues.find((i) => i.path[0] === "supplierInvoiceNo")?.message).toBe(
+      "No. faktur supplier maksimal 50 karakter.",
+    );
+  });
+});

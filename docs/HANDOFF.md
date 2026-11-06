@@ -29,19 +29,20 @@ Code conventions (from the foundation): code, files, routes and DB columns are i
 
 **General:** a web app, dark mode, navy + orange (Master Gym logo). Access by barcode (hardware scanner), or by phone number for elderly members or anyone without their phone. Roles: **kasir** (cashier) and **superadmin**.
 
-> The spec said "navbar on top". The user later changed this to a **sidebar like Sembako**. The sidebar is final.
+> The spec says "navbar on top". The user first chose a sidebar like Sembako, then (spec alignment piece 4, 2026-11-06) asked for the spec to be followed: the menu is now a **top navbar** with click-to-open dropdowns, and a ☰ slide-out panel below 1024px.
 
 ### Kasir (cashier)
 1. **Dashboard:** period filter; number of transactions and revenue; low/empty stock table; recent transactions table.
 2. **Membership**
    - **Absen (check-in):** scan the barcode or type it manually → pop-up with photo, name, days remaining → locker key number input → "Check-In" or "Close". Today's attendance table below (No, time, name, status, locker key).
-   - **Riwayat Absen:** combined history of members and visitors, with a day/date filter.
+   - **Check-In Corporate (Absen):** a company's employees check in against the company's shared visit quota; the kasir types the employee's name each visit *(piece 3)*.
+   - **Riwayat Absen:** combined history of members, visitors and corporate employees, with a day/date filter.
    - **Data Member:** search; status filter (Semua, Aktif, Habis ≤ 7 Hari, Sudah Habis, Visitor); columns: ID, name, phone, status/package, days remaining, total visits, "Detail" button (attendance history).
    - **Pembayaran:** a dropdown picks one of these forms:
      - **Daftar Member Baru:** a "Kelola Paket" pop-up (add/edit/delete packages). Form: member number (auto), name, phone, birth date, gender, status (Pelajar/Mahasiswa/Umum), package, start date, price, payment method (**split allowed**), camera photo. Button "Daftarkan & Buat QR".
      - **Visit (Harian):** name, phone, visit price, payment method (split).
      - **Perpanjang Member (renewal):** search or scan a member; old data fills in (photo, number, name, birth date, gender, phone); cashier updates status, package, price, payment (split).
-     - **Add-On:** a "Kelola Trainer & Paket Tambahan" pop-up for Trainer data (name, phone) and PT programs (6/12/24/36 sessions or per visit, with a price) *(originally requested in Add-On; built in Pengaturan Harga (superadmin) as two pop-ups, Kelola Trainer and Kelola Program PT)*. Form: search or scan a member, PT package, sessions, price, payment (split). *(Corporate package: ON HOLD, don't build.)*
+     - **Add-On:** a "Kelola Trainer & Paket Tambahan" pop-up for Trainer data (name, phone) and PT programs (6/12/24/36 sessions or per visit, with a price) *(built in Add-On as one pop-up with a select since piece 2; Pengaturan Harga keeps two separate buttons)*. Form: search or scan a member, PT package, sessions, price, payment (split). The pop-up's first option is "Paket Corporate" (company, employee count ≥ 50, visit quota, months, price) *(built in piece 3, 2026-11-06)*. Add-On has a Personal Trainer / Corporate switch; Corporate sells a package to a company (no member search).
 3. **Inventori:** summary panel (total products, stock value, low/empty stock); search, category filter, "Kelola Kategori"; table: name, category, stock, min, sale price, cost price, stock value, status, edit. A 3-step add-product wizard.
 4. **Penjualan:** a 4-step wizard: info (auto invoice number, buyer optional, date, notes) → items → payment Cash/Bank (split, **no credit/piutang**) → review.
 5. **Riwayat Penjualan:** period and product filters; table: date, invoice, items, total, buyer, cashier, method, status, detail.
@@ -63,18 +64,19 @@ A one-page **PDF** with QR code, name, member ID, phone, expiry date and photo. 
 |---|---|
 | Accounts | One shared `kasir` account and one `superadmin` |
 | Login | Email + password. **No lockout** (it would lock out the whole desk); marked as a shortcut, so add rate limiting before going online |
-| Layout | Sidebar like Sembako; on phones it becomes a slide-out menu (desktop + phone supported) |
+| Layout | Sticky top navbar (piece 4): one-page sections are links, multi-page sections are click-to-open dropdowns, user menu on the right; below 1024px a ☰ slide-out panel (desktop, tablet and phone supported) |
 | Theme | **Dark only**, navy + orange. The colours are **placeholders** until the user sends the logo |
-| Corporate package | On hold |
-| Renewal | The new period starts at max(latest end date + 1 day, today WIB). No start-date picker. The price is read-only (package + chosen category) |
-| Package prices | Each category (Pelajar/Mahasiswa/Umum) has a monthly base price; price = base × package months. The **superadmin** sets base prices and manages packages in Membership → Pengaturan Harga; the cashier can't change either |
+| Corporate package | Built (piece 3, 2026-11-06). **Shared visit quota**: the company pays once for N visits, each employee check-in uses 1 visit. Employees are not registered (name typed per visit, phone and locker optional). Valid from the WIB payment day for N months; a company may buy again, each purchase keeps its own quota and end date, and a check-in uses the valid purchase that ends soonest and still has visits left. Remaining visits = quota − check-ins (computed, not stored). Jumlah Karyawan (min. 50) is recorded only. Kasir and superadmin both manage corporate packages ("Paket Corporate" in the Add-On pop-up, "Kelola Paket Corporate" on Pengaturan Harga). Deactivating a package keeps its paid purchases usable |
+| Corporate income | Income kind `corporate` (dated by `paid_at` in WIB, label = company name). Laporan's omzet breakdown has a Corporate line; Transaksi Terbaru labels it "Corporate"; Jumlah Transaksi on Home and Dashboard counts it, Laporan's Jumlah Transaksi Penjualan does not |
+| Renewal | The new period starts at max(latest end date + 1 day, today WIB). No start-date picker. The price is filled from the package list for the chosen category and the kasir may edit it |
+| Package prices | Each package stores its own price per category (`price_pelajar`, `price_mahasiswa`, `price_umum`). The **kasir and the superadmin** both manage packages (Kelola Paket on Daftar Member Baru and on Pengaturan Harga). The kasir can also type another Harga on a form; the payments must still equal that Harga exactly. No audit of who changed a price (known limit) |
 | QR content | A **random token**, not the member number or personal data (QR codes can be read by any phone) |
 | Hosting | Will be online later. Not a concern yet |
-| Payments | Each transaction has 1..n payment rows (method + amount), so split payments and Cash/Bank reports work everywhere. Built for memberships, visits, PT, sales and purchases; expenses use one method and no payment rows |
-| Payment methods | **Cash, QRIS, Transfer, Debit** (like Sembako). Reports group QRIS/Transfer/Debit as "Bank" |
+| Payments | Planned: each transaction has 1..n payment rows (method + amount), so split payments and Cash/Bank reports work everywhere |
+| Payment methods | **Cash, QRIS, Transfer** (Debit removed 2026-11-04, the spec lists no card). Reports group QRIS + Transfer as "Bank". The history tables show only Cash / Bank / Cash + Bank (`cashBankLabel`); the Detail pop-up keeps the exact methods |
 | Member number | `MG-0001` (prefix + 4-digit sequence) |
 | Package duration | In **months** (calendar months) |
-| Package price on forms | Computed from package + category, **read-only** for the cashier (changed 2026-10-28, was editable) |
+| Package price on forms | Filled from the list (package + Status) and **editable** by the kasir on Daftar Member Baru, Perpanjang, Visit and Add-On (changed 2026-11-04 to follow the spec; between 2026-10-28 and 2026-11-04 it was read-only). The server no longer rejects a non-list price. Pop-up edits never change the form's current Harga/Sesi; a vanished selection is cleared; one payment row follows Harga |
 | Member phone | **Unique** per member |
 | Member photo | **Required** at registration |
 | PDF/QR libraries | `qrcode` + `jspdf` approved |
@@ -84,7 +86,7 @@ A one-page **PDF** with QR code, name, member ID, phone, expiry date and photo. 
 | Repeat check-in same day | A second scan the same day **warns** ("Sudah check-in hari ini jam …") but is allowed |
 | Trainer | Chosen **at check-in** when "Pakai PT" is ticked, not at purchase |
 | PT sessions | At check-in, a checkbox "use PT this session" takes one session off the member's remaining PT sessions. Sessions never expire. A "per visit" program = 1 session. The balance is computed (purchased − check-ins with a trainer), not stored |
-| Visit, PT prices, trainers | Visit price, PT program prices and trainers are managed by the **superadmin** (Pengaturan Harga); the kasir never types a price |
+| Visit, PT prices, trainers | Trainers and PT programs are managed by the **kasir and the superadmin** (Kelola Trainer & Paket Tambahan on Add-On; Kelola Trainer / Kelola Program PT on Pengaturan Harga). The standard Harga Visit is set only by the **superadmin** (Pengaturan Harga) and pre-fills the Visit form (empty if none); the kasir types any other amount. Add-On Harga and Sesi are editable (Sesi 1–200); `pt_purchases.sessions` stores the sessions actually sold |
 | Units | One unit per product (no box/piece conversion) |
 | Invoice/receipt | None for sales and purchases, record only. Numbers `PJ-0001` / `PB-0001` are generated |
 | Cancel sale/purchase | **Superadmin only**, from the Detail pop-up (Batalkan + confirm). Rows are kept, status becomes Dibatalkan, stock is restored by reversing rows. The kasir sees the same history without the button |
@@ -96,18 +98,32 @@ A one-page **PDF** with QR code, name, member ID, phone, expiry date and photo. 
 | Dates on sale/purchase/expense | Editable, default today WIB, no future dates |
 | Initial stock | Can be entered when adding a product (writes an `initial` movement), so existing stock loads at launch |
 | Expired members | Blocked from check-in: the pop-up shows "Expired", Check-In is disabled (also refused on the server), and **Perpanjang** opens the renewal form with that member selected |
+| Edit Keuangan (day 5) | Opening balances: the superadmin enters starting Cash and Bank **and the date they are valid for**, once. After saving it is locked. Only movements dated on or after that date count toward the running balances |
+| Total Laba (Home) | All income − all costs: (sales + membership + visit + PT + corporate) − cost of goods sold − expenses. Same number as Untung Bersih on Laporan |
+| Uang di Bank / Uang Tunai (Home) | Running balance: opening balance + all money in − all money out since the opening date. **Ignores the period filter**; Bank = QRIS + Transfer |
+| Total Modal (Laporan) | Cost of goods sold in the period (`sale_items.qty × unit_cost` of non-cancelled sales), not money spent on stock |
+| Jumlah Transaksi | Every paid document: sales, memberships (new and renewal), visits, PT purchases and corporate purchases. Not purchases or expenses; cancelled sales don't count. Used on Home and Dashboard |
+| Jumlah Transaksi Penjualan (Laporan) | Laporan shows only the number of **sales** (`saleCount`, distinct sale documents after the Cash/Bank filter; a split sale counts once under each filter). Cancelled sales don't count |
+| Supplier invoice | Purchases have an optional "No. Faktur Supplier" (`purchases.supplier_invoice_no`, max 50, null when empty), shown in Cek Lagi and Detail. `PB-0001` stays the internal number |
+| Kasir column | Riwayat Penjualan has a Kasir column from `sales.created_by` (the logged-in user who saved the sale); "-" for sales saved before 2026-11-04 |
+| Spec alignment (2026-11-04) | The user is re-aligning the app with the original spec in 5 pieces. Piece 1 (small fixes: Debit, Cash/Bank labels, Laporan count, supplier invoice, Kasir) and piece 2 (prices back to the kasir) are done. Piece 3 (Corporate package) and piece 4 (top navbar) are done (2026-11-06). **Spec alignment is complete.** The user **keeps these extras**: Pengaturan Akun, expense categories, superadmin history pages, superadmin Pengaturan Harga. Designs: `docs/superpowers/specs/2026-11-04-spec-alignment-1-small-fixes-design.md`, `docs/superpowers/specs/2026-11-04-spec-alignment-2-prices-to-kasir-design.md`, `docs/superpowers/specs/2026-11-06-spec-alignment-3-corporate-design.md`, `docs/superpowers/specs/2026-11-06-spec-alignment-4-top-navbar-design.md` |
+| Cash/Bank filter | A split-paid document counts toward each method by its own payment amount; a sale's cost of goods is split in the same ratio in whole rupiah, so Cash + Bank = Semua exactly |
+| Check-out | A Logout button per row of today's Absen list records `checked_out_at`; Jam Keluar shows in Absen, Riwayat Absen and Home. Works for visitors too; a second click does nothing |
+| Pengaturan Akun | Password only: the superadmin changes the kasir's or their own password, and must type their own current password |
+| Day 5 defaults | Home and Dashboard default to Hari Ini, Laporan to Bulan Ini; Total Pengeluaran is the `expenses` table only; Member Aktif counts members whose latest membership is active or expiring (≤ 7 days left), as of today; recent transactions show the last 10 |
 
-## 5. Current state (end of day 4, checked 2026-11-04)
+## 5. Current state (end of day 5 plus spec alignment pieces 1 to 4, checked 2026-11-04 and 2026-11-06)
 
-Days 2, 3 and 4 are built and verified. Day 5 (Dashboard, Laporan, Pengaturan Akun) is not started: those three pages still render `PlaceholderPage`. `npm test` runs 114 tests in 6 files, all passing. Day 3 (check-in, visit, renewal, PT) was run in a browser as kasir and superadmin with a simulated scanner (typing the token + Enter). Day 4 (shop) was run in a browser as kasir and superadmin. The dev DB was wiped and reseeded on 2026-10-28 because it predated day 1; days 3 and 4 added tables with `npm run db:push`.
+Days 2, 3, 4 and 5 are built, and spec alignment piece 1 was added and browser-checked on 2026-11-04 (no Debit, Cash/Bank in histories, Laporan sales count, supplier invoice, Kasir column; `npm run db:push` added two columns and the enum change needed the SQL in [DATABASE.md](./DATABASE.md)). Day 5 was run in a browser on 2026-11-04 against a `[TEST]` fixture: Kasir Dashboard, Superadmin Home with Edit Keuangan, Laporan with the period and Cash/Bank filters, Pengaturan Akun, and check-out on Absen. Piece 2 (prices back to the kasir) was browser-checked on 2026-11-04 as kasir and superadmin; the registration photo step needs a real webcam (the check used a stubbed camera). `npm run db:push` needs the upgrade steps in [DATABASE.md](./DATABASE.md) on a database that has data. Piece 3 (Corporate package) was browser-checked on 2026-11-06 as kasir and superadmin: package setup, a split-payment sale, check-ins against the quota, the attendance lists with Logout, and the reports. `npm run db:push` adds three tables, `payments.corporate_purchase_id` and the renamed check (see [DATABASE.md](./DATABASE.md)). Piece 4 (top navbar) was browser-checked on 2026-11-06 as kasir and superadmin at 1024, 1280 and 1366px wide, at 900px (☰) and on the phone preset: no overflow, dropdowns and the current page highlighted, Keluar logs out, Absen keeps focus. `npm test` runs 203 tests in 12 files, all passing. Day 3 (check-in, visit, renewal, PT) was run in a browser as kasir and superadmin with a simulated scanner (typing the token + Enter). Day 4 (shop) was run in a browser as kasir and superadmin. The dev DB was wiped and reseeded on 2026-10-28 because it predated day 1; days 3, 4 and 5 added tables and columns with `npm run db:push`.
 
 **Done**
-- Day 1 (foundation): roles, `requireRole()`, sidebar menus per role, 13 pages, dark navy/orange theme, seed accounts `superadmin@mastergym.test` / `kasir@mastergym.test` (password `password123`, dev only).
-- Day 2 (member registration): `features/membership/` with unit tests (`npm test`); Daftar Member Baru wizard, Pengaturan Harga (category base prices, Kelola Paket), member PDF card, Data Member with Edit, photo uploads (`lib/uploads.ts`, `/api/uploads/[...path]`, Docker `uploads_data` volume). Docker image builds and runs on :3002.
+- Day 1 (foundation): roles, `requireRole()`, menus per role (a sidebar then, a top navbar since piece 4), 13 pages, dark navy/orange theme, seed accounts `superadmin@mastergym.test` / `kasir@mastergym.test` (password `password123`, dev only).
+- Day 2 (member registration): `features/membership/` with unit tests (`npm test`); Daftar Member Baru wizard, Pengaturan Harga (originally category base prices, Kelola Paket; base prices were replaced by per-package prices in piece 2), member PDF card, Data Member with Edit, photo uploads (`lib/uploads.ts`, `/api/uploads/[...path]`, Docker `uploads_data` volume). Docker image builds and runs on :3002.
 - **Absen** (`/membership/check-in`): one input that keeps focus; scan a token or type a phone (`+62 …` works) → pop-up with photo, status, days left, locker, "Pakai PT" + trainer when PT balance > 0 → Check-In. Today's list below. Expired members are blocked. Same-day repeat warns.
-- **Riwayat Absen** (`/membership/attendance`): members and visitors for one date, with PT trainer shown.
-- **Pembayaran** has four forms via `?form=new|visit|renew|addon&member=`: Visit (automatic check-in, split payment), Perpanjang Member, Add-On PT. All prices are recomputed on the server; a stale price returns "Harga sudah berubah, muat ulang halaman."
-- **Pengaturan Harga** (superadmin): Harga Visit, Kelola Trainer, Kelola Program PT.
+- **Riwayat Absen** (`/membership/attendance`): members, visitors and corporate check-ins for one date, with PT trainer shown.
+- **Pembayaran** has four forms via `?form=new|visit|renew|addon&member=`: Visit (automatic check-in, split payment), Perpanjang Member, Add-On PT. Prices are filled from the list and editable; the server accepts the submitted price (1 to 999 999 999 999) and requires payments to equal it exactly; the package/program must be active.
+- **Pengaturan Harga** (superadmin): Harga Visit (standard), Kelola Paket, Kelola Trainer, Kelola Program PT, Kelola Paket Corporate. The base-price card is gone; each package carries its own three prices.
+- **Corporate package (piece 3)**, code in `features/corporate/`: manage packages (Add-On pop-up, Pengaturan Harga), sell on Add-On (Corporate switch, Kuota and Harga editable, split payment), "Check-In Corporate" on Absen (options "<company> (paket N visit) — sisa X visit, s/d <date>"; employee name required; the soonest-ending valid purchase with visits left is used under `FOR UPDATE` locks so the quota can't go below zero). Corporate rows show in Absen, Riwayat Absen ("N orang (a member, b visitor, c corporate)") and Home, with Logout. Reports include corporate income.
 - **Data Member:** Total Kehadiran column, Detail dialog (PT balance + check-in history), Visitor filter.
 - 6 new tables and `payments` links, see [DATABASE.md](./DATABASE.md).
 - Day 4 (shop), code in `features/shop/`, `features/expenses/`, `lib/period.ts`:
@@ -116,19 +132,32 @@ Days 2, 3 and 4 are built and verified. Day 5 (Dashboard, Laporan, Pengaturan Ak
   - **Riwayat Penjualan** / **Riwayat Pembelian** (kasir + superadmin): period filter (sales also by product), Detail pop-up; only the superadmin can Batalkan.
   - **Pengeluaran** (kasir adds; superadmin sees the history, deletes, and manages categories).
   - Stock is the sum of `stock_movements`, never stored; 10 new tables, see [DATABASE.md](./DATABASE.md).
+- Day 5 (dashboards and reports), code in `features/reports/` and `features/administration/`:
+  - **Dashboard** (kasir): period filter (default Hari Ini), Jumlah Transaksi, Omzet, Stok Menipis/Habis, Transaksi Terbaru.
+  - **Home** (superadmin): period filter plus Total Laba, Uang di Bank, Uang Tunai, Total Pengeluaran, product and member tiles, Stok Menipis/Habis, Transaksi Terbaru, Absensi Hari Ini (with Jam Keluar) and Reminder Member (expiring in ≤ 7 days). **Edit Keuangan** saves the opening balance once.
+  - **Laporan** (superadmin): period + Cash/Bank/Semua filter that recalculates every tile (the count tile is Jumlah Transaksi Penjualan); Laba per Produk and Detail Penjualan tables.
+  - **Pengaturan Akun** (superadmin): change the kasir's or own password (current password required).
+  - **Check-out:** Logout per row on Absen; Jam Keluar on Absen, Riwayat Absen and Home.
+  - All the maths is pure, tested functions in `features/reports/logic.ts`; one shared list of money movements feeds every number.
 
 **Not done / known gaps**
-- The real USB scanner was tested by the user on 2026-10-30 and works. The real webcam is still untested on the front-desk PC.
+- The real USB scanner was tested by the user on 2026-10-30 and works. Still untested in the real world: the webcam on the front-desk PC, and Home and Laporan on a phone.
 - The webcam needs HTTPS if the app is opened over the LAN (`localhost` is fine).
-- No cancel/refund for visits, renewals or PT purchases.
+- No cancel/refund for visits, renewals, PT or corporate purchases; a corporate purchase can't be edited after saving.
 - Riwayat Absen shows one date at a time.
+- **Day 5 gaps:**
+  - The opening balance has no in-app fix: a wrong value after saving needs a DB edit (`opening_balance`, single row).
+  - Reports load every money movement and aggregate in memory, linear in row count (`// shortcut:` in `features/reports/queries.ts`); move the sums into SQL if the data grows to hundreds of thousands of rows.
+  - Changing a password does not log out other sessions (stateless JWT, see [AUTH.md](./AUTH.md)).
+  - Check-out only works for today's rows.
+  - Transaksi Terbaru orders by save time (`paid_at`), so a backdated sale appears by when it was entered, not by its date.
 - **Day 4 gaps:**
   - No stock correction (stok opname).
   - No invoice print or PDF.
   - Purchase-cancel average-cost reversal is best-effort: exact only when no other stock change happened since that purchase. If the cancel empties stock, the average is kept (not reset to 0).
   - No pagination on the sales/purchase/expense histories or Inventori.
   - Esc does not close the Kelola pop-ups (Kelola Paket, Trainer, Program PT, Kategori, Supplier) while an input is focused. Use the X button. Likely a browser-automation artifact; re-test with a physical keyboard.
-  - `drizzle-kit push` doesn't update a changed CHECK whose name stays the same: rename the check when you change it (that's why payments' check is `payments_exactly_one_link`).
+  - `drizzle-kit push` doesn't update a changed CHECK whose name stays the same: rename the check when you change it (that's why payments' check is `payments_one_link_v3`).
   - Invoice numbers can skip after a failed save (the sequence isn't rolled back).
   - Cancelling a sale of a since-deactivated product restores its stock to the hidden product.
 - Impossible dates such as `2026-02-31` in the URL roll over to the next month.
@@ -136,9 +165,9 @@ Days 2, 3 and 4 are built and verified. Day 5 (Dashboard, Laporan, Pengaturan Ak
 - The Dockerfile uses `node:20-alpine`. Node 20 reached end-of-life in April 2026; move to Node 22 or 24 before launch (and re-check which npm the image ships, see the lockfile note above).
 - No pagination in Data Member, Visitor list or attendance (shortcut; add it if lists get long).
 - Orphan photo files are kept when a member's photo is replaced (shortcut).
-- The real logo and colours are pending (send the logo → update `app/globals.css` and the "M" badge in `components/app-sidebar.tsx`).
-- `docs/superpowers/specs/2026-10-17-foundation-design.md` describes the old single-account version. It's marked **Superseded** and kept for history. The day 2–4 specs and plans are also history: where they disagree with these docs, these docs win.
-- `package-lock.json` must be regenerated with npm 10 (the Docker image's npm): a lock written by npm 11 made `npm ci` fail in Docker (missing optional `esbuild` entries). The Mac has Homebrew Node 26, which ships npm 11, so pin npm with `npm install -g npm@10` (a `brew upgrade node` can undo it; check `npm -v`). If the lockfile shows hundreds of deleted `@esbuild/*` lines in `git diff`, restore it with `git checkout package-lock.json`. If it happens again: `docker run --rm -v "$PWD":/w -w /w node:20-alpine npm install --package-lock-only --ignore-scripts`.
+- The real logo and colours are pending (send the logo → update `app/globals.css` and the "M" badge in `components/app-navbar.tsx`).
+- `docs/superpowers/specs/2026-10-17-foundation-design.md` is outdated (it describes the old single-account version).
+- `package-lock.json` must be regenerated with npm 10 (the Docker image's npm): a lock written by npm 11 made `npm ci` fail in Docker (missing optional `esbuild` entries). If it happens again: `docker run --rm -v "$PWD":/w -w /w node:20-alpine npm install --package-lock-only --ignore-scripts`.
 - Dev note: `next dev` (Turbopack) sometimes keeps a stale module after new server exports/actions are added. Symptom: `… is not a function` or `Cannot read properties of undefined (reading 'apply')`. Restart `npm run dev`.
 
 ## 6. Set up on a new PC
@@ -161,7 +190,7 @@ Build order for the remaining days: **day 2** members → **day 3** check-in, at
 **How to work each day:** ask that day's open questions first (rule 3) → build in `features/<domain>/` following Sembako → run `npm run lint` and `npm run build` → test in the browser as the right role → update this file's "Current state" and the other docs → tell the user it's ready to commit (never commit yourself).
 
 **Day 2 scope**
-1. Kelola Paket pop-up (CRUD packages, a price per category).
+1. Kelola Paket pop-up (CRUD packages; since piece 2 each package has a price per category).
 2. Daftar Member Baru form (auto member number, details, camera photo, package and price, split payment) → saves the member and the payment.
 3. Member PDF (QR + details + photo) to download.
 4. Data Member list with search and status filters.
@@ -185,8 +214,8 @@ Pages: `/membership/check-in`, `/membership/attendance`, and the remaining forms
 2. **Riwayat Absen** at `/membership/attendance`: members and visitors together, with a day/date filter.
 3. **Data Member "Detail" button** (from day 2): that member's attendance history.
 4. **Pembayaran → Visit (Harian):** name, phone, price, split payment. Saves a visitor check-in for today.
-5. **Pembayaran → Perpanjang Member (renewal):** search or scan a member; old data shown read-only; the cashier picks category, package, price, split payment. The new period starts the day after the current end date, or today if already expired.
-6. **Pembayaran → Add-On (Personal Trainer):** Trainer data (name, phone) and PT programs (6/12/24/36 sessions or per visit, with price) are managed by the superadmin in Pengaturan Harga, as two pop-ups: Kelola Trainer and Kelola Program PT (not in the Add-On form). Form: search or scan a member, PT program, sessions, price, split payment. Adds sessions to the member's PT balance. **Corporate package is on hold, so don't build it.**
+5. **Pembayaran → Perpanjang Member (renewal):** search or scan a member; old data shown read-only; the cashier picks category and package; Harga is filled from the list and editable; split payment. The new period starts the day after the current end date, or today if already expired.
+6. **Pembayaran → Add-On (Personal Trainer):** Trainer data (name, phone) and PT programs (6/12/24/36 sessions or per visit, with price) are managed by the kasir in the Add-On form's "Kelola Trainer & Paket Tambahan" pop-up (select Data Trainer / Program Trainer), and by the superadmin in Pengaturan Harga as two pop-ups (Kelola Trainer, Kelola Program PT). Form: search or scan a member, PT program, sessions (editable, 1–200), price (editable), split payment. Adds sessions to the member's PT balance. The Corporate option was added in piece 3 (2026-11-06), see section 5.
 
 **Day 3 questions:** all answered on 2026-10-29, see the table in section 4 (repeat check-in warns, trainer at check-in, per visit = 1 session; visitors only need a record, no receipt).
 
@@ -217,30 +246,23 @@ Keep:
 
 **Day 4 is done when:** a product can be added, bought in (stock up), sold (stock down) and cancelled (stock restored), with split payments recorded; low/empty stock shows; expenses can be added.
 
-## 10. Day 5: dashboards, reports, account settings, real-world test
+## 10. Day 5: dashboards, reports, account settings, real-world test (built 2026-11-04)
 
-Pages: `/dashboard` (different content per role), `/reports`, `/administration/account-settings`. Detail in section 3 (Kasir → Dashboard, Superadmin → Home, Laporan).
+Pages: `/dashboard` (different content per role), `/reports`, `/administration/account-settings`. Detail in section 3 (Kasir → Dashboard, Superadmin → Home, Laporan). The decisions are in section 4; the full design is in `docs/superpowers/specs/2026-11-04-day5-dashboards-reports-design.md` (history).
 
 **Scope**
-1. **Kasir dashboard:** period filter; transaction count and revenue; low/empty stock table; recent transactions.
-2. **Superadmin Home:** period filter; profit, money in the bank, cash, expenses; total products, stock value, profit on goods sold, active/remaining members, transaction count; tables: low stock, recent transactions, today's attendance, members expiring in ≤ 7 days. **"Edit Keuangan"**: only active at launch; meaning still to be confirmed (see questions).
-3. **Laporan:** period filter + payment-method filter (all / cash / bank) that recalculates **everything**; revenue = sales + membership + visit + add-on; total cost, net profit, profit %, expenses (this period and all time); profit per product table; sales detail table.
-4. **Pengaturan Akun:** superadmin changes the kasir's and their own password.
-5. **Real-world test** at the front desk: the actual scanner, the actual PC screen, a phone for the superadmin.
+1. [done] **Kasir dashboard:** period filter; transaction count and revenue; low/empty stock table; recent transactions.
+2. [done] **Superadmin Home:** period filter; profit, money in the bank, cash, expenses; total products, stock value, profit on goods sold, active/remaining members, transaction count; tables: low stock, recent transactions, today's attendance, members expiring in ≤ 7 days. **Edit Keuangan**: opening balance as of a date, saved once.
+3. [done] **Laporan:** period filter + payment-method filter (all / cash / bank) that recalculates everything; profit per product table; sales detail table.
+4. [done] **Pengaturan Akun:** superadmin changes the kasir's or their own password.
+5. [done] **Check-out** (added in the day 5 talk): Logout per row on Absen, Jam Keluar shown.
+6. [not done] **Real-world test** at the front desk. The real scanner was already tested on 2026-10-30. Still to do: the webcam on the desk PC, and Home and Laporan on a phone.
 
-Reuse Sembako's `features/dashboard/dashboard-page.tsx` and `laporan-page.tsx` and its period filter (`lib/date.ts` `computeDateRange`, `PERIODE_OPTIONS`).
-
-**Ask before starting day 5**
-1. What exactly is "Edit Keuangan"? (Probably entering opening cash/bank balances once at launch.) When is it switched off?
-2. Does "Total Laba" on Home include membership income, or only product profit?
-3. Is "Uang di Bank" cumulative since launch, or for the selected period?
-4. Which timezone? Presumably WIB (Asia/Jakarta) for "today" and periods.
-
-**Day 5 is done when:** every number on Home and Laporan can be checked by hand against a few test transactions, and the cash/bank filter changes them correctly.
+**Day 5 is done when:** every number on Home and Laporan can be checked by hand against a few test transactions, and the cash/bank filter changes them correctly. This was checked in the browser on 2026-11-04 against a `[TEST]` fixture (Cash + Bank = Semua exactly); only the real-world test remains.
 
 ## 11. After day 5 (not scheduled)
 
-Go online (hosting, HTTPS, rate limiting for login, real passwords, backups), the corporate package (on hold), tests for the money logic, and a `/ponytail-audit` + Trail of Bits `sharp-edges` review before launch.
+Go online (hosting, HTTPS, rate limiting for login, real passwords, backups), tests for the money logic, and a `/ponytail-audit` + Trail of Bits `sharp-edges` review before launch.
 
 ## 12. Other docs
 

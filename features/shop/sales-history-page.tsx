@@ -16,7 +16,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { PAYMENT_METHOD_LABELS } from "@/features/membership/validation";
+import { cashBankLabel } from "@/features/reports/logic";
 import { formatDateId, rupiah } from "@/lib/format";
 import type { Period } from "@/lib/period";
 import type { Role } from "@/lib/auth/session";
@@ -91,6 +91,7 @@ export function SalesHistoryPage({
                 <TableHead>Item</TableHead>
                 <TableHead className="text-right">Total</TableHead>
                 <TableHead>Pembeli</TableHead>
+                <TableHead>Kasir</TableHead>
                 <TableHead>Metode</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead>Aksi</TableHead>
@@ -104,7 +105,8 @@ export function SalesHistoryPage({
                   <TableCell className="max-w-64 whitespace-normal">{r.itemsLabel}</TableCell>
                   <TableCell className="text-right">{rupiah.format(r.total)}</TableCell>
                   <TableCell>{r.buyerName ?? "-"}</TableCell>
-                  <TableCell>{r.methods.map((m) => PAYMENT_METHOD_LABELS[m]).join(", ")}</TableCell>
+                  <TableCell>{r.cashierName ?? "-"}</TableCell>
+                  <TableCell>{cashBankLabel(r.methods)}</TableCell>
                   <TableCell>
                     <StatusBadge status={r.status} />
                   </TableCell>

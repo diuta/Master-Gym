@@ -4,33 +4,38 @@ import { useState, useTransition } from "react";
 import { AlertCircle, CheckCircle2 } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
+import { CurrencyInput } from "@/components/ui/currency-input";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { RequiredMark } from "@/components/ui/required-mark";
-import { rupiah } from "@/lib/format";
 import { createVisitAction } from "./actions";
 import { PaymentRows, type PaymentRow } from "./payment-rows";
 import { VisitSchema, type VisitInput } from "./validation";
 
-const PRICE_UNSET = "Harga belum diatur, hubungi superadmin.";
-
-export function VisitForm({ price }: { price: number | null }) {
+export function VisitForm({ price: standardPrice }: { price: number | null }) {
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
   const [lockerNo, setLockerNo] = useState("");
+  const [price, setPriceState] = useState<number | null>(standardPrice);
   const [payments, setPayments] = useState<PaymentRow[]>([
-    { method: "cash", amount: price ?? 0 },
+    { method: "cash", amount: standardPrice ?? 0 },
   ]);
   const [errors, setErrors] = useState<Record<string, string[]>>({});
   const [message, setMessage] = useState<string | null>(null);
   const [saved, setSaved] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
 
+  // One payment row simply follows Harga; several rows stay as the kasir typed them.
+  function setPrice(p: number | null) {
+    setPriceState(p);
+    if (payments.length === 1) setPayments([{ ...payments[0], amount: p ?? 0 }]);
+  }
+
   function submit() {
-    if (pending || price === null) return;
+    if (pending) return;
     setMessage(null);
     setSaved(null);
-    const input = { name, phone, lockerNo, price, payments } as VisitInput;
+    const input = { name, phone, lockerNo, price: price ?? undefined, payments } as VisitInput;
     const r = VisitSchema.safeParse(input);
     if (!r.success) return setErrors(r.error.flatten().fieldErrors);
     setErrors({});
@@ -42,7 +47,8 @@ export function VisitForm({ price }: { price: number | null }) {
           setName("");
           setPhone("");
           setLockerNo("");
-          setPayments([{ method: "cash", amount: price }]);
+          setPriceState(standardPrice);
+          setPayments([{ method: "cash", amount: standardPrice ?? 0 }]);
           return;
         }
         setErrors(result.errors ?? {});
@@ -102,20 +108,26 @@ export function VisitForm({ price }: { price: number | null }) {
         {fieldError("lockerNo")}
       </div>
       <div className="space-y-1.5">
-        <p className="text-sm font-medium">Harga</p>
-        <p className="text-2xl font-semibold">{price === null ? "-" : rupiah.format(price)}</p>
-        {price === null && <p className="text-base text-destructive">{PRICE_UNSET}</p>}
+        <Label htmlFor="visit-price">
+          Harga Visit
+          <RequiredMark />
+        </Label>
+        <CurrencyInput
+          id="visit-price"
+          className="h-11 text-base"
+          value={price === null ? "" : String(price)}
+          onChange={(raw) => setPrice(raw === "" ? null : Number(raw))}
+        />
+        {fieldError("price")}
       </div>
-      {price !== null && (
-        <div className="space-y-1.5">
-          <Label>
-            Pembayaran
-            <RequiredMark />
-          </Label>
-          <PaymentRows price={price} value={payments} onChange={setPayments} />
-          {fieldError("payments")}
-        </div>
-      )}
+      <div className="space-y-1.5">
+        <Label>
+          Pembayaran
+          <RequiredMark />
+        </Label>
+        <PaymentRows price={price ?? 0} value={payments} onChange={setPayments} />
+        {fieldError("payments")}
+      </div>
 
       {message && (
         <Alert variant="destructive">
@@ -132,7 +144,7 @@ export function VisitForm({ price }: { price: number | null }) {
         </Alert>
       )}
 
-      <Button type="submit" size="xl" disabled={pending || price === null}>
+      <Button type="submit" size="xl" disabled={pending}>
         {pending ? "Menyimpan..." : "Simpan & Check-In"}
       </Button>
     </form>

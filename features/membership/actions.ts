@@ -1,12 +1,12 @@
 "use server";
 
 import { randomBytes } from "crypto";
-import { and, desc, eq, ne, sql } from "drizzle-orm";
+import { and, desc, eq, gte, isNull, ne, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { db } from "@/lib/db";
 import {
-  categoryPrices,
   checkIns,
+  corporateCheckIns,
   members,
   memberships,
   packages,
@@ -22,24 +22,23 @@ import { saveBase64Upload } from "@/lib/uploads";
 import {
   formatMemberNo,
   membershipEndDate,
-  membershipPrice,
   renewalStartDate,
   todayWib,
+  wibDayRange,
 } from "./logic";
 import {
   findMemberSummary,
   getMemberDetail,
   getMemberSummary,
-  getVisitPrice,
   searchMembers,
   type MemberDetail,
 } from "./queries";
 import {
-  CategoryPricesSchema,
   CheckInSchema,
   type CheckInInput,
+  CheckOutSchema,
+  type CheckOutInput,
   type MemberSummary,
-  type CategoryPricesInput,
   PackageSchema,
   PtProgramSchema,
   type PtProgramInput,
@@ -70,45 +69,37 @@ function revalidatePricing() {
   revalidatePath("/membership/check-in");
 }
 
-export async function saveCategoryPricesAction(input: CategoryPricesInput): Promise<ActionResult> {
-  await requireRole("superadmin");
-  const v = CategoryPricesSchema.safeParse(input);
-  if (!v.success) return { errors: v.error.flatten().fieldErrors };
-
-  await db
-    .insert(categoryPrices)
-    .values(
-      Object.entries(v.data).map(([category, price]) => ({
-        category: category as keyof typeof v.data,
-        pricePerMonth: String(price),
-      })),
-    )
-    .onConflictDoUpdate({
-      target: categoryPrices.category,
-      set: { pricePerMonth: sql`excluded.price_per_month`, updatedAt: new Date() },
-    });
-  revalidatePricing();
-  return { success: true, data: undefined };
-}
-
 export async function createPackageAction(input: PackageInput): Promise<ActionResult> {
-  await requireRole("superadmin");
+  await requireRole("kasir", "superadmin");
   const v = PackageSchema.safeParse(input);
   if (!v.success) return { errors: v.error.flatten().fieldErrors };
 
-  await db.insert(packages).values({ name: v.data.name, months: v.data.months });
+  await db.insert(packages).values({
+    name: v.data.name,
+    months: v.data.months,
+    pricePelajar: String(v.data.pricePelajar),
+    priceMahasiswa: String(v.data.priceMahasiswa),
+    priceUmum: String(v.data.priceUmum),
+  });
   revalidatePricing();
   return { success: true, data: undefined };
 }
 
 export async function updatePackageAction(id: number, input: PackageInput): Promise<ActionResult> {
-  await requireRole("superadmin");
+  await requireRole("kasir", "superadmin");
   const v = PackageSchema.safeParse(input);
   if (!v.success) return { errors: v.error.flatten().fieldErrors };
 
   const updated = await db
     .update(packages)
-    .set({ name: v.data.name, months: v.data.months, updatedAt: new Date() })
+    .set({
+      name: v.data.name,
+      months: v.data.months,
+      pricePelajar: String(v.data.pricePelajar),
+      priceMahasiswa: String(v.data.priceMahasiswa),
+      priceUmum: String(v.data.priceUmum),
+      updatedAt: new Date(),
+    })
     .where(and(eq(packages.id, id), eq(packages.isActive, true)))
     .returning({ id: packages.id });
   if (updated.length === 0) return NOT_FOUND;
@@ -119,7 +110,7 @@ export async function updatePackageAction(id: number, input: PackageInput): Prom
 
 // Packages with sold memberships are only deactivated so history keeps its FK.
 export async function deletePackageAction(id: number): Promise<ActionResult> {
-  await requireRole("superadmin");
+  await requireRole("kasir", "superadmin");
 
   const [used] = await db
     .select({ id: memberships.id })
@@ -163,7 +154,7 @@ const TRAINER_NOT_FOUND = { message: "Trainer tidak ditemukan." };
 const PROGRAM_NOT_FOUND = { message: "Program tidak ditemukan." };
 
 export async function createTrainerAction(input: TrainerInput): Promise<ActionResult> {
-  await requireRole("superadmin");
+  await requireRole("kasir", "superadmin");
   const v = TrainerSchema.safeParse(input);
   if (!v.success) return { errors: v.error.flatten().fieldErrors };
 
@@ -173,7 +164,7 @@ export async function createTrainerAction(input: TrainerInput): Promise<ActionRe
 }
 
 export async function updateTrainerAction(id: number, input: TrainerInput): Promise<ActionResult> {
-  await requireRole("superadmin");
+  await requireRole("kasir", "superadmin");
   const v = TrainerSchema.safeParse(input);
   if (!v.success) return { errors: v.error.flatten().fieldErrors };
 
@@ -190,7 +181,7 @@ export async function updateTrainerAction(id: number, input: TrainerInput): Prom
 
 // Trainers with check-ins are only deactivated so history keeps its FK.
 export async function deleteTrainerAction(id: number): Promise<ActionResult> {
-  await requireRole("superadmin");
+  await requireRole("kasir", "superadmin");
 
   const [used] = await db
     .select({ id: checkIns.id })
@@ -215,7 +206,7 @@ export async function deleteTrainerAction(id: number): Promise<ActionResult> {
 }
 
 export async function createPtProgramAction(input: PtProgramInput): Promise<ActionResult> {
-  await requireRole("superadmin");
+  await requireRole("kasir", "superadmin");
   const v = PtProgramSchema.safeParse(input);
   if (!v.success) return { errors: v.error.flatten().fieldErrors };
 
@@ -230,7 +221,7 @@ export async function updatePtProgramAction(
   id: number,
   input: PtProgramInput,
 ): Promise<ActionResult> {
-  await requireRole("superadmin");
+  await requireRole("kasir", "superadmin");
   const v = PtProgramSchema.safeParse(input);
   if (!v.success) return { errors: v.error.flatten().fieldErrors };
 
@@ -252,7 +243,7 @@ export async function updatePtProgramAction(
 
 // Programs with purchases are only deactivated so history keeps its FK.
 export async function deletePtProgramAction(id: number): Promise<ActionResult> {
-  await requireRole("superadmin");
+  await requireRole("kasir", "superadmin");
 
   const [used] = await db
     .select({ id: ptPurchases.id })
@@ -309,16 +300,6 @@ export async function registerMemberAction(
     .where(and(eq(packages.id, d.packageId), eq(packages.isActive, true)))
     .limit(1);
   if (!pkg) return { errors: { packageId: ["Paket tidak tersedia, pilih paket lain."] } };
-
-  // The price is decided here, never trusted from the browser.
-  const [base] = await db
-    .select({ pricePerMonth: categoryPrices.pricePerMonth })
-    .from(categoryPrices)
-    .where(eq(categoryPrices.category, d.category))
-    .limit(1);
-  const price = membershipPrice(base && Number(base.pricePerMonth), pkg.months);
-  if (price === null) return { message: "Harga belum diatur, hubungi superadmin." };
-  if (price !== d.price) return { message: "Harga sudah berubah, muat ulang halaman." };
 
   const taken = await phoneTaken(d.phone);
   if (taken) return taken;
@@ -483,21 +464,58 @@ export async function checkInAction(input: CheckInInput): Promise<ActionResult> 
   return result;
 }
 
+// Only today's rows can be logged out; the IS NULL guard keeps a double click from
+// overwriting the first time, and a zero-row update is still a success.
+export async function checkOutAction(input: CheckOutInput): Promise<ActionResult> {
+  await requireRole("kasir");
+  const v = CheckOutSchema.safeParse(input);
+  if (!v.success) return { errors: v.error.flatten().fieldErrors };
+  const { kind, id } = v.data;
+  const { start } = wibDayRange(todayWib());
+  const now = new Date();
+
+  if (kind === "member") {
+    await db
+      .update(checkIns)
+      .set({ checkedOutAt: now })
+      .where(
+        and(eq(checkIns.id, id), isNull(checkIns.checkedOutAt), gte(checkIns.checkedInAt, start)),
+      );
+  } else if (kind === "corporate") {
+    await db
+      .update(corporateCheckIns)
+      .set({ checkedOutAt: now })
+      .where(
+        and(
+          eq(corporateCheckIns.id, id),
+          isNull(corporateCheckIns.checkedOutAt),
+          gte(corporateCheckIns.checkedInAt, start),
+        ),
+      );
+  } else {
+    await db
+      .update(visits)
+      .set({ checkedOutAt: now })
+      .where(and(eq(visits.id, id), isNull(visits.checkedOutAt), gte(visits.createdAt, start)));
+  }
+
+  revalidatePath("/membership/check-in");
+  revalidatePath("/membership/attendance");
+  revalidatePath("/dashboard");
+  return { success: true, data: undefined };
+}
+
 export async function createVisitAction(input: VisitInput): Promise<ActionResult> {
   await requireRole("kasir");
   const v = VisitSchema.safeParse(input);
   if (!v.success) return { errors: v.error.flatten().fieldErrors };
   const d = v.data;
 
-  const price = await getVisitPrice();
-  if (price === null) return { message: "Harga belum diatur, hubungi superadmin." };
-  if (price !== d.price) return { message: "Harga sudah berubah, muat ulang halaman." };
-
   // A visit row is also the check-in: Absen lists today's visits.
   await db.transaction(async (tx) => {
     const [visit] = await tx
       .insert(visits)
-      .values({ name: d.name, phone: d.phone, price: String(price), lockerNo: d.lockerNo })
+      .values({ name: d.name, phone: d.phone, price: String(d.price), lockerNo: d.lockerNo })
       .returning({ id: visits.id });
     await tx.insert(payments).values(
       d.payments.map((p) => ({ visitId: visit.id, method: p.method, amount: String(p.amount) })),
@@ -531,15 +549,6 @@ export async function renewMemberAction(
     .limit(1);
   if (!pkg) return { errors: { packageId: ["Paket tidak tersedia, pilih paket lain."] } };
 
-  const [base] = await db
-    .select({ pricePerMonth: categoryPrices.pricePerMonth })
-    .from(categoryPrices)
-    .where(eq(categoryPrices.category, d.category))
-    .limit(1);
-  const price = membershipPrice(base && Number(base.pricePerMonth), pkg.months);
-  if (price === null) return { message: "Harga belum diatur, hubungi superadmin." };
-  if (price !== d.price) return { message: "Harga sudah berubah, muat ulang halaman." };
-
   const result = await db.transaction(async (tx): Promise<ActionResult<MemberCard>> => {
     // Lock first so two renewals of one member can't both start from the same end date.
     const [member] = await tx
@@ -566,7 +575,7 @@ export async function renewMemberAction(
         packageName: pkg.name,
         months: pkg.months,
         category: d.category,
-        price: String(price),
+        price: String(d.price),
         startDate,
         endDate,
       })
@@ -618,9 +627,6 @@ export async function buyPtAction(
     .where(and(eq(ptPrograms.id, d.ptProgramId), eq(ptPrograms.isActive, true)))
     .limit(1);
   if (!program) return { errors: { ptProgramId: ["Program PT tidak tersedia, pilih program lain."] } };
-  if (Number(program.price) !== d.price) {
-    return { message: "Harga sudah berubah, muat ulang halaman." };
-  }
 
   // Expired members may buy: sessions never expire, so no membership check.
   const result = await db.transaction(
@@ -638,7 +644,7 @@ export async function buyPtAction(
           memberId: member.id,
           ptProgramId: program.id,
           programName: program.name,
-          sessions: program.sessions,
+          sessions: d.sessions,
           price: String(d.price),
         })
         .returning({ id: ptPurchases.id });

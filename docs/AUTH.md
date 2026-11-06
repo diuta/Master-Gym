@@ -11,7 +11,7 @@ There are two roles, defined once in `lib/db/schema.ts` as the Postgres enum `ro
 | `kasir` | The front-desk cashier. **One shared account.** | Dashboard, Membership (Absen, Riwayat Absen, Data Member, Pembayaran), Inventori, Tambah/Riwayat Penjualan, Tambah/Riwayat Pembelian, Pengeluaran |
 | `superadmin` | The owner/manager. One account. | Home, Laporan, Pengaturan Harga, Riwayat Penjualan, Riwayat Pembelian, Pengeluaran, Pengaturan Akun |
 
-The roles mostly don't overlap: the superadmin does **not** get the cashier's daily-operation pages (the spec says the admin doesn't check members in), and the cashier can't see reports. The exceptions are the history pages Riwayat Penjualan, Riwayat Pembelian and Pengeluaran, which both roles open. On them, **cancelling a sale or purchase, deleting an expense, and managing expense categories are superadmin-only** (the actions call `requireRole("superadmin")`; the kasir doesn't see the buttons). Everything else on those pages (adding sales, purchases and expenses) is kasir-only. Both share `/dashboard`, which will show different content per role.
+The roles mostly don't overlap: the superadmin does **not** get the cashier's daily-operation pages (the spec says the admin doesn't check members in), and the cashier can't see reports. The shared management is the other exception: since 2026-11-04 the actions that create, edit and delete **packages, trainers, PT programs and corporate packages** call `requireRole("kasir", "superadmin")`, so the kasir manages them from Daftar Member Baru and Add-On (corporate packages: "Paket Corporate" in the Add-On pop-up) and the superadmin from Pengaturan Harga ("Kelola Paket Corporate"). Selling a corporate package (`buyCorporateAction`) and Check-In Corporate (`corporateCheckInAction`) are kasir-only. `saveVisitPriceAction` (the standard Harga Visit) stays `requireRole("superadmin")`, and the page gates are unchanged (`/membership/pricing` superadmin, `/membership/payment` kasir). The other exceptions are the history pages Riwayat Penjualan, Riwayat Pembelian and Pengeluaran, which both roles open. On them, **cancelling a sale or purchase, deleting an expense, and managing expense categories are superadmin-only** (the actions call `requireRole("superadmin")`; the kasir doesn't see the buttons). Everything else on those pages (adding sales, purchases and expenses) is kasir-only. Both share `/dashboard`, which shows different content per role (kasir Dashboard, superadmin Home). Reports and Pengaturan Akun are superadmin-only.
 
 The TypeScript type `Role = "superadmin" | "kasir"` lives in `lib/auth/session.ts`. If a role is ever added, change the enum in `schema.ts`, the `Role` type, `navForRole` in `lib/nav.ts`, and run `npm run db:push`.
 
@@ -22,7 +22,7 @@ The TypeScript type `Role = "superadmin" | "kasir"` lives in `lib/auth/session.t
   ```bash
   npm run db:create-user -- --name="Kasir" --email=kasir@contoh.id --password=... --role=kasir
   ```
-- **Changing a password:** there is no screen for it yet (planned under Pengaturan Akun). For now, update the row with a new bcrypt hash, or delete the user and create it again.
+- **Changing a password:** the superadmin uses Pengaturan Akun (`/administration/account-settings`) to change the kasir's password or their own. It needs the superadmin's own current password every time, and the new password must be at least 8 characters. Other open sessions stay logged in (see section 6).
 
 ## 2. Logging in, step by step
 
@@ -92,7 +92,7 @@ Rules for new code:
 
 ## 5. Logout
 
-The "Keluar" button in the sidebar submits `logoutAction`, which deletes the cookie and redirects to `/login`.
+The "Keluar" item in the navbar's user menu submits `logoutAction`, which deletes the cookie and redirects to `/login`.
 
 ## 6. Known limits
 
@@ -100,5 +100,5 @@ The "Keluar" button in the sidebar submits `logoutAction`, which deletes the coo
 |---|---|---|
 | No lockout or rate limit | Unlimited password guessing | Rate limiting before going online |
 | Stateless JWT | Logout only deletes the cookie in *this* browser; a copied cookie stays valid until it expires. Changing a password doesn't log out other devices | Store sessions in the database and check them per request |
-| Role inside the token | If a user's role changes in the DB, their existing cookie keeps the old role until they log in again (the sidebar reads the DB role, the page guards read the token) | Re-login after role changes, or DB-stored sessions |
+| Role inside the token | If a user's role changes in the DB, their existing cookie keeps the old role until they log in again (the navbar reads the DB role, the page guards read the token) | Re-login after role changes, or DB-stored sessions |
 | Shared kasir account | Actions can't be traced to a specific cashier | Separate accounts per cashier if that's ever needed |

@@ -4,11 +4,20 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { AlertCircle, Package, Pencil, Plus, Settings, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { CurrencyInput } from "@/components/ui/currency-input";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { EmptyState } from "@/components/ui/empty-state";
 import { RequiredMark } from "@/components/ui/required-mark";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import {
   Dialog,
   DialogContent,
@@ -30,10 +39,24 @@ import {
   deletePackageAction,
   updatePackageAction,
 } from "./actions";
+import { rupiah } from "@/lib/format";
+import { CATEGORY_LABELS, type MemberCategory } from "./validation";
 import type { PackageOption } from "./queries";
 
-type FormState = { name: string; months: string };
-const EMPTY: FormState = { name: "", months: "" };
+type FormState = {
+  name: string;
+  months: string;
+  pricePelajar: string;
+  priceMahasiswa: string;
+  priceUmum: string;
+};
+const EMPTY: FormState = { name: "", months: "", pricePelajar: "", priceMahasiswa: "", priceUmum: "" };
+
+const PRICE_FIELDS: { key: "pricePelajar" | "priceMahasiswa" | "priceUmum"; category: MemberCategory }[] = [
+  { key: "pricePelajar", category: "pelajar" },
+  { key: "priceMahasiswa", category: "mahasiswa" },
+  { key: "priceUmum", category: "umum" },
+];
 
 // Empty string must reach the schema as undefined so it reports "wajib diisi".
 const num = (s: string) => (s === "" ? undefined : Number(s));
@@ -62,7 +85,13 @@ export function KelolaPaketDialog({ packages }: { packages: PackageOption[] }) {
 
   function startEdit(p: PackageOption) {
     setEditingId(p.id);
-    setForm({ name: p.name, months: String(p.months) });
+    setForm({
+      name: p.name,
+      months: String(p.months),
+      pricePelajar: String(p.prices.pelajar),
+      priceMahasiswa: String(p.prices.mahasiswa),
+      priceUmum: String(p.prices.umum),
+    });
     setErrors({});
     setMessage(null);
   }
@@ -93,6 +122,9 @@ export function KelolaPaketDialog({ packages }: { packages: PackageOption[] }) {
     const input = {
       name: form.name,
       months: num(form.months) as number,
+      pricePelajar: num(form.pricePelajar) as number,
+      priceMahasiswa: num(form.priceMahasiswa) as number,
+      priceUmum: num(form.priceUmum) as number,
     };
     const ok = await run(() =>
       editingId === null ? createPackageAction(input) : updatePackageAction(editingId, input),
@@ -125,7 +157,7 @@ export function KelolaPaketDialog({ packages }: { packages: PackageOption[] }) {
           <Settings />
           Kelola Paket
         </DialogTrigger>
-        <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-xl">
+        <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-3xl">
           <DialogHeader>
             <DialogTitle>Kelola Paket</DialogTitle>
           </DialogHeader>
@@ -139,36 +171,57 @@ export function KelolaPaketDialog({ packages }: { packages: PackageOption[] }) {
                 className="py-4"
               />
             ) : (
-              packages.map((p) => (
-                <div key={p.id} className="flex items-center gap-2 rounded-md border px-3 py-2">
-                  <p className="flex-1 text-base font-medium">
-                    {p.name}{" "}
-                    <span className="font-normal text-muted-foreground">{p.months} bulan</span>
-                  </p>
-                  <Button
-                    variant="outline"
-                    className="h-11"
-                    disabled={pending}
-                    onClick={() => startEdit(p)}
-                  >
-                    <Pencil />
-                    Edit
-                  </Button>
-                  <Button
-                    variant="destructive"
-                    className="h-11"
-                    disabled={pending}
-                    onClick={() => {
-                      setDeleteTarget(p);
-                      setMessage(null);
-                      setStage("confirmDelete");
-                    }}
-                  >
-                    <Trash2 />
-                    Hapus
-                  </Button>
-                </div>
-              ))
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Nama</TableHead>
+                    <TableHead>Bulan</TableHead>
+                    {PRICE_FIELDS.map((f) => (
+                      <TableHead key={f.key}>{CATEGORY_LABELS[f.category]}</TableHead>
+                    ))}
+                    <TableHead />
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {packages.map((p) => (
+                    <TableRow key={p.id}>
+                      <TableCell className="text-base font-medium">{p.name}</TableCell>
+                      <TableCell className="text-base">{p.months}</TableCell>
+                      {PRICE_FIELDS.map((f) => (
+                        <TableCell key={f.key} className="text-base">
+                          {rupiah.format(p.prices[f.category])}
+                        </TableCell>
+                      ))}
+                      <TableCell>
+                        <div className="flex justify-end gap-2">
+                          <Button
+                            variant="outline"
+                            className="h-11"
+                            disabled={pending}
+                            onClick={() => startEdit(p)}
+                          >
+                            <Pencil />
+                            Edit
+                          </Button>
+                          <Button
+                            variant="destructive"
+                            className="h-11"
+                            disabled={pending}
+                            onClick={() => {
+                              setDeleteTarget(p);
+                              setMessage(null);
+                              setStage("confirmDelete");
+                            }}
+                          >
+                            <Trash2 />
+                            Hapus
+                          </Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
             )}
           </div>
 
@@ -205,6 +258,22 @@ export function KelolaPaketDialog({ packages }: { packages: PackageOption[] }) {
               />
               {fieldError("months")}
             </div>
+            {PRICE_FIELDS.map((f) => (
+              <div key={f.key} className="space-y-1.5">
+                <Label htmlFor={`paket-${f.key}`}>
+                  Harga {CATEGORY_LABELS[f.category].toLowerCase()}
+                  <RequiredMark />
+                </Label>
+                <CurrencyInput
+                  id={`paket-${f.key}`}
+                  className="h-11 text-base"
+                  value={form[f.key]}
+                  onChange={set(f.key)}
+                  disabled={pending}
+                />
+                {fieldError(f.key)}
+              </div>
+            ))}
             {message && stage === "list" && (
               <Alert variant="destructive">
                 <AlertCircle />

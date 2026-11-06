@@ -1,4 +1,4 @@
-import { AlertTriangle, CheckCircle2, CircleOff, UserCheck, UserRound, XCircle } from "lucide-react"
+import { AlertTriangle, Building2, CheckCircle2, CircleOff, UserCheck, UserRound, XCircle } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { cn } from "@/lib/utils"
 
@@ -15,6 +15,7 @@ export type StatusKind =
   | "member_expired"
   | "member"
   | "visitor"
+  | "corporate"
 
 const statusConfig: Record<
   StatusKind,
@@ -79,6 +80,11 @@ const statusConfig: Record<
     label: "Visitor",
     icon: UserRound,
     className: "bg-primary/10 text-primary border-primary/30",
+  },
+  corporate: {
+    label: "Corporate",
+    icon: Building2,
+    className: "bg-secondary text-secondary-foreground border-border",
   },
 }
 
