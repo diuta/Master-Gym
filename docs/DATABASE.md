@@ -120,11 +120,12 @@ One row per purchase/renewal period.
 | `pt_purchase_id` | FK `pt_purchases.id`, nullable | Link to a PT purchase (day 3) |
 | `sale_id` | FK `sales.id`, nullable | Link to a sale (day 4): money in |
 | `purchase_id` | FK `purchases.id`, nullable | Link to a stock purchase (day 4): money out |
+| `corporate_purchase_id` | FK `corporate_purchases.id`, nullable | Link to a corporate purchase (piece 3) |
 | `method` | `payment_method` not null | |
 | `amount` | `decimal(14,2)` not null | Rows of one purchase sum to its price |
 | `paid_at` | `timestamp` not null, default now | |
 
-Check `payments_exactly_one_link`: `num_nonnulls(membership_id, visit_id, pt_purchase_id, sale_id, purchase_id) = 1`, so every payment row belongs to exactly one document. Renamed from `payments_one_link` because drizzle-kit push does not update a check whose name is unchanged.
+Check `payments_one_link_v3`: `num_nonnulls(membership_id, visit_id, pt_purchase_id, sale_id, purchase_id, corporate_purchase_id) = 1`, so every payment row belongs to exactly one document. The check is renamed each time it gains a column (`payments_one_link` → `payments_exactly_one_link` → `payments_one_link_v3`) because drizzle-kit push does not update a check whose name is unchanged; `npm run db:push` replaces the check itself, and existing rows (exactly one link each) satisfy the new 6-column check. If you upgrade by hand, use `ALTER TABLE payments DROP CONSTRAINT IF EXISTS payments_exactly_one_link;`.
 
 ### Day 3 tables
 
@@ -140,6 +141,16 @@ Check `payments_exactly_one_link`: `num_nonnulls(membership_id, visit_id, pt_pur
 **PT balance is computed, not stored:** sum of `pt_purchases.sessions` for the member minus the count of that member's `check_ins` with `trainer_id` not null. PT sessions never expire. Check-in locks the member row so the balance can't go below zero.
 
 **Check-out (day 5):** `check_ins.checked_out_at` and `visits.checked_out_at` are nullable timestamps (UTC wall-clock, like the others). `checkOutAction` sets one only if it is still null and the row is from today WIB.
+
+### Corporate tables (piece 3)
+
+| Table | Columns | Notes |
+|---|---|---|
+| `corporate_packages` | `id`, `company_name` varchar(100), `employee_count` int (≥ 50, recorded only), `visit_quota` int, `months` int, `price` decimal(14,2), `is_active`, `created_at`, `updated_at` | The definition, managed by kasir and superadmin. Company names are not unique. Deleting one that has purchases only deactivates it |
+| `corporate_purchases` | `id`, `corporate_package_id` FK, `company_name`, `employee_count`, `visit_quota`, `price` (copies as sold), `start_date`, `end_date`, `created_at` | One sale. `start_date` is the WIB payment day; `end_date` = `membershipEndDate(start_date, months)`. Payments link through `payments.corporate_purchase_id` |
+| `corporate_check_ins` | `id`, `corporate_purchase_id` FK, `employee_name` varchar(100), `phone` nullable, `locker_no` nullable, `checked_in_at`, `checked_out_at` nullable | One employee visit. Indexes on `checked_in_at` and `corporate_purchase_id` |
+
+**Remaining visits** of a purchase = `visit_quota` − count of its `corporate_check_ins`. Computed, never stored (like the PT balance). A check-in locks the candidate purchases (`FOR UPDATE`), picks the valid one (`start_date ≤ today ≤ end_date`) that ends soonest and still has visits left, and inserts, so two simultaneous check-ins can't overdraw the quota.
 
 ### Table `opening_balance` (day 5)
 

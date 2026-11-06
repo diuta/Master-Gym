@@ -45,7 +45,7 @@ master-gym/
 │   ├── api/uploads/[...path]/ Serves member photos (kasir only)
 │   ├── login/page.tsx        "/login" → re-exports features/authentication/login-page
 │   └── (app)/                Route group for logged-in pages (the "(app)" part is NOT in the URL)
-│       ├── layout.tsx        Checks the session, loads the user, renders sidebar + header
+│       ├── layout.tsx        Checks the session, loads the user, renders the navbar + <main>
 │       ├── dashboard/        "/dashboard"   (both roles; title differs)
 │       ├── membership/       check-in, attendance, members, payment   (kasir)
 │       ├── inventory/        (kasir)
@@ -59,14 +59,14 @@ master-gym/
 │   ├── membership/           packages, registration, PDF card, Data Member, check-in, visits, renewal, PT (days 2–3)
 │   ├── shop/                 products, stock ledger, sales, purchases, histories (day 4)
 │   ├── expenses/             expenses and expense categories (day 4)
+│   ├── corporate/            corporate packages, sale, Check-In Corporate (piece 3)
 │   ├── reports/              Dashboard, Home, Laporan, opening balance, report maths (day 5)
 │   └── administration/       Pengaturan Akun: change password (day 5)
 ├── components/
-│   ├── app-sidebar.tsx       The logged-in sidebar (menu per role, user box, logout)
+│   ├── app-navbar.tsx        The logged-in top navbar (menu per role, user menu, logout, ☰ on small screens)
 │   ├── period-filter.tsx     Period dropdown + custom dates for the history pages, Dashboard, Home and Laporan (URL params)
 │   └── ui/                   shadcn/Base UI kit + a few house components (see UI.md)
 ├── hooks/
-│   ├── use-mobile.ts         true below 768px wide (drives the mobile sidebar)
 │   └── use-sort.ts           Click-to-sort helper for tables
 ├── lib/
 │   ├── auth/session.ts       Create/read/delete the signed session cookie
@@ -78,7 +78,7 @@ master-gym/
 │   ├── db/seed.ts            CLI: creates the two dev accounts
 │   ├── db/create-user.ts     CLI: creates one account with a hashed password
 │   ├── period.ts             Period options and WIB date ranges (today/week/month/year/all/custom)
-│   ├── nav.ts                Sidebar menu definition per role
+│   ├── nav.ts                Menu definition per role + navbar items
 │   └── utils.ts              cn() — merges Tailwind class names
 ├── proxy.ts                  Runs before every page: redirects to /login if not logged in
 ├── docs/                     This documentation
@@ -106,7 +106,7 @@ master-gym/
 | `/login` | `app/login/page.tsx` → `features/authentication/login-page.tsx` | logged out | Email + password form |
 | `/dashboard` | `app/(app)/dashboard/page.tsx` | both | Kasir: Dashboard (period filter, Jumlah Transaksi, Omzet, low stock, recent transactions). Superadmin: Home (profit, bank and cash balances, tiles, four tables, Edit Keuangan) |
 | `/membership/check-in` | `app/(app)/membership/check-in/page.tsx` | kasir | Absen: scan/phone input, member pop-up (locker, PT + trainer), today's attendance |
-| `/membership/attendance` | `.../membership/attendance/page.tsx` | kasir | Riwayat Absen: members and visitors for one date (`?date=YYYY-MM-DD`) |
+| `/membership/attendance` | `.../membership/attendance/page.tsx` | kasir | Riwayat Absen: members, visitors and corporate check-ins for one date (`?date=YYYY-MM-DD`) |
 | `/membership/members` | `.../membership/members/page.tsx` | kasir | Data Member: search, status filter incl. Visitor, Total Kehadiran, Detail, Edit and PDF buttons |
 | `/membership/payment` | `.../membership/payment/page.tsx` | kasir | Pembayaran: form picker driven by `?form=new\|visit\|renew\|addon&member=<id>` (Daftar Member Baru, Visit, Perpanjang, Add-On PT) |
 | `/membership/pricing` | `.../membership/pricing/page.tsx` | superadmin | Pengaturan Harga: Harga Visit (standard), Kelola Paket, Kelola Trainer, Kelola Program PT (no base-price card since piece 2) |
@@ -152,8 +152,7 @@ Browser GET /membership/check-in
   │      verifySession()  → session { userId, role }  (redirects to /login if missing)
   │      SELECT name, email, role FROM users WHERE id = userId
   │      • user deleted → redirect /login
-  │      reads the "sidebar_state" cookie (sidebar open or collapsed)
-  │      renders <SidebarProvider> + <AppSidebar role=…> + header + <main>{page}</main>
+  │      renders <AppNavbar name email role /> + <main>{page}</main>
   │
   └─4─ app/(app)/membership/check-in/page.tsx   (Server Component)
          requireRole("kasir")   → superadmin would be redirected to /dashboard
@@ -197,11 +196,11 @@ Future feature actions follow the same steps, in Sembako's order: `requireRole(.
 
 | File | What it does |
 |---|---|
-| `app/layout.tsx` | Root layout. Loads the Geist and Geist Mono fonts as CSS variables, puts `class="dark"` on `<html>` (so shadcn's `dark:` variants always apply), sets `lang="id"`, page title "Master Gym", and wraps everything in `TooltipProvider` (needed by sidebar tooltips). |
+| `app/layout.tsx` | Root layout. Loads the Geist and Geist Mono fonts as CSS variables, puts `class="dark"` on `<html>` (so shadcn's `dark:` variants always apply), sets `lang="id"`, page title "Master Gym", and wraps everything in `TooltipProvider` (needed by `components/ui/tooltip.tsx`). |
 | `app/globals.css` | Imports Tailwind, `tw-animate-css` and shadcn's base CSS; maps CSS variables to Tailwind colours (`@theme inline`); defines **the colour theme** in `:root`; base styles; print rules (from Sembako, for printing invoice dialogs later). See [UI.md](./UI.md). |
 | `app/page.tsx` | `redirect("/dashboard")`. |
 | `app/login/page.tsx` | One line: re-exports the login page from `features/authentication`. |
-| `app/(app)/layout.tsx` | The logged-in shell: session check, user lookup, sidebar, header bar (sidebar toggle + "Master Gym"), and `<main>` with padding. |
+| `app/(app)/layout.tsx` | The logged-in shell: session check, user lookup, the sticky top navbar, and `<main>` with padding. |
 | `app/(app)/**/page.tsx` | The 14 logged-in pages listed in section 3. Each calls `requireRole` (or `verifySession` for the shared dashboard), loads data from `features/*/queries.ts` and renders a `features/*` page. All pages are built. |
 | `app/api/uploads/[...path]/route.ts` | `GET`: `requireRole("kasir")`, then `readUpload()`; content type from the file extension, `private` cache for a day; 404 for an unknown extension, a missing file or a path outside `UPLOADS_DIR`. |
 
@@ -238,7 +237,22 @@ Future feature actions follow the same steps, in Sembako's order: `requireRole(.
 | `member-detail-dialog.tsx` | Detail pop-up: PT balance + check-in history. |
 | `*.test.ts` | Vitest unit tests for `logic.ts` and `validation.ts`. |
 
-Day 5 changes here: `checkOutAction` (kasir; sets `checked_out_at` for a member check-in or visit of today, only if still empty) with `CheckOutSchema`, and a "Jam Keluar" column plus a Logout button per row in `attendance-table.tsx` (the button is hidden on Home and in Riwayat Absen).
+Day 5 changes here: `checkOutAction` (kasir; sets `checked_out_at` for a member check-in, visit or corporate check-in of today, only if still empty) with `CheckOutSchema`, and a "Jam Keluar" column plus a Logout button per row in `attendance-table.tsx` (the button is hidden on Home and in Riwayat Absen).
+
+### `features/corporate/` (piece 3)
+
+| File | What it does |
+|---|---|
+| `logic.ts` | Pure, tested: `pickCorporatePurchase` (the valid purchase that ends soonest and still has visits left). |
+| `validation.ts` | Zod: `CorporatePackageSchema`, the sale schema (package, Kuota, Harga, payments) and the check-in schema (package, employee name, optional phone and locker). |
+| `queries.ts` | Server-only: `listActiveCorporatePackages()` (for Add-On and Kelola) and `listCorporateCheckInOptions(today)` (companies with a valid purchase and visits left, with remaining visits and end date). |
+| `actions.ts` | `"use server"`. Kasir + superadmin: `create/update/deleteCorporatePackageAction`. Kasir: `buyCorporateAction` (purchase + payments in one transaction), `corporateCheckInAction` (`FOR UPDATE` locks). |
+| `kelola-paket-corporate-dialog.tsx` | CRUD pop-up for packages; the hook is also used inside the Add-On pop-up and Pengaturan Harga. |
+| `corporate-sale-form.tsx` | The Corporate side of the Add-On form. |
+| `corporate-check-in-dialog.tsx` | "Check-In Corporate" pop-up on Absen; focus returns to the scan input on close. |
+| `*.test.ts` | Vitest tests for `logic.ts` and `validation.ts`. |
+
+Touched elsewhere: `features/membership/` (Add-On switch, Absen button, `AttendanceRow.kind` `corporate`, `listAttendance` merges `corporate_check_ins`, `checkOutAction` handles corporate rows) and `features/reports/` (income kind `corporate`).
 
 ### `features/reports/` (day 5)
 
@@ -289,14 +303,13 @@ Day 5 changes here: `checkOutAction` (kasir; sets `checked_out_at` for a member 
 
 | File | What it does |
 |---|---|
-| `app-sidebar.tsx` | Client component. Props: `name`, `email`, `role`. Header: orange "M" badge, "Master Gym", and the role label ("Kasir" / "Super Admin"). Body: `navForRole(role)` rendered as labelled groups of links; the link whose `href` equals the current path is highlighted. Footer: user initials, name, email, and a "Keluar" button that submits `logoutAction`. `collapsible="icon"` lets desktop users shrink it to icons. |
+| `app-navbar.tsx` | Client component. Props: `name`, `email`, `role`. Sticky top bar: orange "M" badge + "Master Gym", then `navItems(navForRole(role))` as links and click-to-open dropdowns (from 1024px), then the user menu (initials, name and role; the superadmin bar is compact below 1280px) with name, email, role and a "Keluar" item that submits `logoutAction`. Below 1024px a ☰ button opens a `Sheet` with the grouped list. The current page and its dropdown are highlighted. See [UI.md](./UI.md) section 1. |
 | `ui/*` | The UI kit. See [UI.md](./UI.md) for the full list. |
 
 ### `hooks/`
 
 | File | What it does |
 |---|---|
-| `use-mobile.ts` | `useIsMobile()` returns `true` when the window is narrower than 768px. Built on React's `useSyncExternalStore`: the server and the first browser render both say `false`, then React switches to the real value. This avoids the hydration-mismatch error the original version had (Sembako still has that bug). Used by `components/ui/sidebar.tsx`. |
 | `use-sort.ts` | `useSort(rows, getValue)` → `{ sortedRows, sort, toggleSort }`. Clicking a column cycles ascending → descending → off. Numbers compare as numbers, everything else with Indonesian locale ordering. Pairs with `components/ui/sortable-th.tsx`. Used by the Data Member table. |
 
 ### `lib/`
@@ -309,7 +322,7 @@ Day 5 changes here: `checkOutAction` (kasir; sets `checked_out_at` for a member 
 | `lib/db/index.ts` | Server-only. Creates one `pg` connection pool and exports `db` (Drizzle). If `DATABASE_URL` contains `sslmode=require`, it strips that and connects with SSL that accepts self-signed certificates (needed by some hosted databases). |
 | `lib/db/seed.ts` | CLI (`npm run db:seed`). Creates `superadmin@mastergym.test` and `kasir@mastergym.test`, both with password `password123`. Safe to run again: existing accounts and expense categories are skipped; it also adds the six default expense categories. **Dev only.** |
 | `lib/db/create-user.ts` | CLI (`npm run db:create-user -- --name=… --email=… --password=… --role=kasir|superadmin`). Validates the role against the enum, hashes the password, inserts the user. Use this on a real server instead of the seed. |
-| `lib/nav.ts` | The sidebar menu: `kasirSections` and `superadminSections`, each a list of `{ label, entries: [{ label, href, icon }] }`. `navForRole(role)` picks one. **To add a menu item, edit this file.** The page itself must still call `requireRole`; hiding a link is not security. |
+| `lib/nav.ts` | The menu: `kasirSections` and `superadminSections`, each a list of `{ label, entries: [{ label, href, icon }] }`. `navForRole(role)` picks one. `navItems(sections)` turns them into navbar items (one-page section → link, several pages → dropdown named after the section, title case); `isGroupActive(entries, pathname)` marks an open dropdown; `isNavCompact(role)` says which bar shrinks below 1280px (superadmin only). Tested in `lib/nav.test.ts`. **To add a menu item, edit this file.** The page itself must still call `requireRole`; hiding a link is not security. |
 | `lib/period.ts` | `PERIOD_OPTIONS`, `parsePeriod`, `periodRange` (WIB date range for a period; tested in `period.test.ts`). Used by the history pages. |
 | `lib/format.ts` | `rupiah` (`Intl.NumberFormat`, "Rp150.000"), `formatDateId(date)` and `formatTimeWib(date)` (HH.mm, Asia/Jakarta). |
 | `lib/uploads.ts` | `UPLOADS_DIR`, `saveBase64Upload` (validates type and size ≤ 2 MB, writes a random filename), `readUpload` (rejects paths outside the folder). |
@@ -358,7 +371,7 @@ Defined in `.env` (local, gitignored; copy from `.env.example`).
 | I want to… | Edit |
 |---|---|
 | Change colours | `app/globals.css` (`:root` block) |
-| Change the logo badge / app name in the sidebar | `components/app-sidebar.tsx` |
+| Change the logo badge / app name in the navbar | `components/app-navbar.tsx` |
 | Add, rename or reorder a menu item | `lib/nav.ts`, then create the page under `app/(app)/…` with `requireRole` |
 | Add a new page | Create `features/<domain>/<name>-page.tsx`, render it from the route file |
 | Add a table or column | `lib/db/schema.ts`, then `npm run db:push` |

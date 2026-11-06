@@ -3,6 +3,7 @@ import { and, asc, eq, isNull, ne, or, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { db } from "@/lib/db";
 import {
+  corporatePurchases,
   expenses,
   members,
   memberships,
@@ -33,6 +34,7 @@ export async function listMovements(): Promise<Movement[]> {
         membershipId: payments.membershipId,
         visitId: payments.visitId,
         ptPurchaseId: payments.ptPurchaseId,
+        corporatePurchaseId: payments.corporatePurchaseId,
         method: payments.method,
         amount: payments.amount,
         paidAt: payments.paidAt,
@@ -42,6 +44,7 @@ export async function listMovements(): Promise<Movement[]> {
         memberName: members.name,
         visitName: visits.name,
         ptMemberName: ptMembers.name,
+        corporateName: corporatePurchases.companyName,
       })
       .from(payments)
       .leftJoin(sales, eq(sales.id, payments.saleId))
@@ -51,6 +54,7 @@ export async function listMovements(): Promise<Movement[]> {
       .leftJoin(visits, eq(visits.id, payments.visitId))
       .leftJoin(ptPurchases, eq(ptPurchases.id, payments.ptPurchaseId))
       .leftJoin(ptMembers, eq(ptMembers.id, ptPurchases.memberId))
+      .leftJoin(corporatePurchases, eq(corporatePurchases.id, payments.corporatePurchaseId))
       .where(
         and(
           or(isNull(payments.saleId), eq(sales.status, "success")),
@@ -94,6 +98,10 @@ export async function listMovements(): Promise<Movement[]> {
       kind = "visit";
       docId = p.visitId;
       label = p.visitName ?? "";
+    } else if (p.corporatePurchaseId !== null) {
+      kind = "corporate";
+      docId = p.corporatePurchaseId;
+      label = p.corporateName ?? "";
     } else {
       kind = "pt";
       docId = p.ptPurchaseId!;

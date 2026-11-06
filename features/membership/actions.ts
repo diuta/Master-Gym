@@ -6,6 +6,7 @@ import { revalidatePath } from "next/cache";
 import { db } from "@/lib/db";
 import {
   checkIns,
+  corporateCheckIns,
   members,
   memberships,
   packages,
@@ -479,6 +480,17 @@ export async function checkOutAction(input: CheckOutInput): Promise<ActionResult
       .set({ checkedOutAt: now })
       .where(
         and(eq(checkIns.id, id), isNull(checkIns.checkedOutAt), gte(checkIns.checkedInAt, start)),
+      );
+  } else if (kind === "corporate") {
+    await db
+      .update(corporateCheckIns)
+      .set({ checkedOutAt: now })
+      .where(
+        and(
+          eq(corporateCheckIns.id, id),
+          isNull(corporateCheckIns.checkedOutAt),
+          gte(corporateCheckIns.checkedInAt, start),
+        ),
       );
   } else {
     await db

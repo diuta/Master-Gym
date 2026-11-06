@@ -15,7 +15,7 @@ import {
 } from "lucide-react";
 import type { Role } from "@/lib/auth/session";
 
-type NavEntry = {
+export type NavEntry = {
   label: string;
   href: string;
   icon: LucideIcon;
@@ -102,4 +102,31 @@ const superadminSections: NavSection[] = [
 
 export function navForRole(role: Role): NavSection[] {
   return role === "kasir" ? kasirSections : superadminSections;
+}
+
+export type NavItem =
+  | { kind: "link"; entry: NavEntry }
+  | { kind: "group"; label: string; entries: NavEntry[] };
+
+const titleCase = (s: string) =>
+  s.toLowerCase().replace(/\b\p{L}/gu, (c) => c.toUpperCase());
+
+// The top navbar has no room for headings: a one-page section is just its link,
+// a multi-page section becomes a dropdown named after the section.
+export function navItems(sections: NavSection[]): NavItem[] {
+  return sections.map((s) =>
+    s.entries.length === 1
+      ? { kind: "link", entry: s.entries[0] }
+      : { kind: "group", label: titleCase(s.label ?? ""), entries: s.entries },
+  );
+}
+
+export function isGroupActive(entries: NavEntry[], pathname: string): boolean {
+  return entries.some((e) => e.href === pathname);
+}
+
+// The superadmin's single-page links have long names and overflow at 1024px at full size;
+// the kasir bar fits, so it keeps the 16px text the UI rules ask for.
+export function isNavCompact(role: Role): boolean {
+  return role === "superadmin";
 }

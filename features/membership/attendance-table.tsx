@@ -74,6 +74,7 @@ export function AttendanceTable({
                 <div className="flex flex-wrap items-center gap-2">
                   <StatusBadge status={r.kind} className="h-7 px-2.5 text-base [&>svg]:size-4!" />
                   {r.trainerName && <span>PT · {r.trainerName}</span>}
+                  {r.companyName && <span>{r.companyName}</span>}
                 </div>
               </TableCell>
               <TableCell>{r.lockerNo ?? "-"}</TableCell>

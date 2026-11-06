@@ -9,6 +9,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import type { CorporatePackageOption } from "@/features/corporate/queries";
 import { PtAddonForm } from "./pt-addon-form";
 import type { PackageOption, PtProgramOption, TrainerOption } from "./queries";
 import { RegisterMemberWizard } from "./register-member-wizard";
@@ -31,6 +32,7 @@ export function PaymentPage({
   visitPrice,
   ptPrograms,
   trainers,
+  corporatePackages,
   member,
 }: {
   form: PaymentForm;
@@ -38,6 +40,7 @@ export function PaymentPage({
   visitPrice: number | null;
   ptPrograms: PtProgramOption[];
   trainers: TrainerOption[];
+  corporatePackages: CorporatePackageOption[];
   member: MemberSummary | null;
 }) {
   const router = useRouter();
@@ -80,6 +83,7 @@ export function PaymentPage({
           key={member?.id ?? "none"}
           programs={ptPrograms}
           trainers={trainers}
+          corporatePackages={corporatePackages}
           initialMember={member}
         />
       )}

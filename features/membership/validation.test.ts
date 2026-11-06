@@ -93,6 +93,9 @@ describe("CheckOutSchema", () => {
   it("accepts a visitor", () => {
     expect(CheckOutSchema.safeParse({ kind: "visitor", id: 3 }).success).toBe(true);
   });
+  it("accepts a corporate row", () => {
+    expect(CheckOutSchema.safeParse({ kind: "corporate", id: 1 }).success).toBe(true);
+  });
 });
 
 describe("VisitSchema", () => {

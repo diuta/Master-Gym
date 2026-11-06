@@ -3,6 +3,8 @@ import { and, asc, count, desc, eq, gte, ilike, lt, max, min, or, sql } from "dr
 import { db } from "@/lib/db";
 import {
   checkIns,
+  corporateCheckIns,
+  corporatePurchases,
   members,
   memberships,
   packages,
@@ -235,7 +237,7 @@ export async function searchMembers(text: string): Promise<MemberSummary[]> {
 
 export async function listAttendance(date: string): Promise<AttendanceRow[]> {
   const { start, end } = wibDayRange(date);
-  const [memberRows, visitRows] = await Promise.all([
+  const [memberRows, visitRows, corporateRows] = await Promise.all([
     db
       .select({
         id: checkIns.id,
@@ -260,11 +262,40 @@ export async function listAttendance(date: string): Promise<AttendanceRow[]> {
       })
       .from(visits)
       .where(and(gte(visits.createdAt, start), lt(visits.createdAt, end))),
+    db
+      .select({
+        id: corporateCheckIns.id,
+        at: corporateCheckIns.checkedInAt,
+        checkedOutAt: corporateCheckIns.checkedOutAt,
+        name: corporateCheckIns.employeeName,
+        lockerNo: corporateCheckIns.lockerNo,
+        companyName: corporatePurchases.companyName,
+      })
+      .from(corporateCheckIns)
+      .innerJoin(
+        corporatePurchases,
+        eq(corporatePurchases.id, corporateCheckIns.corporatePurchaseId),
+      )
+      .where(
+        and(gte(corporateCheckIns.checkedInAt, start), lt(corporateCheckIns.checkedInAt, end)),
+      ),
   ]);
 
   return [
-    ...memberRows.map((r) => ({ kind: "member" as const, ...r })),
-    ...visitRows.map((r) => ({ kind: "visitor" as const, ...r, memberNo: null, trainerName: null })),
+    ...memberRows.map((r) => ({ kind: "member" as const, ...r, companyName: null })),
+    ...visitRows.map((r) => ({
+      kind: "visitor" as const,
+      ...r,
+      memberNo: null,
+      trainerName: null,
+      companyName: null,
+    })),
+    ...corporateRows.map((r) => ({
+      kind: "corporate" as const,
+      ...r,
+      memberNo: null,
+      trainerName: null,
+    })),
   ].sort((a, b) => b.at.getTime() - a.at.getTime());
 }
 

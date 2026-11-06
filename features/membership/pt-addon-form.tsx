@@ -18,6 +18,8 @@ import {
 import { buyPtAction } from "./actions";
 import { MemberSearch } from "./member-search";
 import { PaymentRows, type PaymentRow } from "./payment-rows";
+import type { CorporatePackageOption } from "@/features/corporate/queries";
+import { CorporateSaleForm } from "@/features/corporate/corporate-sale-form";
 import { KelolaTrainerPaketTambahanDialog } from "./kelola-trainer-paket-tambahan-dialog";
 import type { PtProgramOption, TrainerOption } from "./queries";
 import { PtPurchaseSchema, type MemberSummary, type PtPurchaseInput } from "./validation";
@@ -25,12 +27,15 @@ import { PtPurchaseSchema, type MemberSummary, type PtPurchaseInput } from "./va
 export function PtAddonForm({
   programs,
   trainers,
+  corporatePackages,
   initialMember,
 }: {
   programs: PtProgramOption[];
   trainers: TrainerOption[];
+  corporatePackages: CorporatePackageOption[];
   initialMember: MemberSummary | null;
 }) {
+  const [mode, setMode] = useState<"pt" | "corporate">("pt");
   const [member, setMember] = useState<MemberSummary | null>(initialMember);
   const [programId, setProgramId] = useState<number | null>(null);
   const [sessions, setSessions] = useState<number | null>(null);
@@ -120,9 +125,32 @@ export function PtAddonForm({
     // The pop-up has its own forms and sits outside this one: React submit events bubble
     // through portals.
     <div className="max-w-2xl space-y-4 rounded-xl border bg-card p-4 sm:p-6">
-      <KelolaTrainerPaketTambahanDialog trainers={trainers} programs={programs} />
+      <KelolaTrainerPaketTambahanDialog
+        trainers={trainers}
+        programs={programs}
+        corporatePackages={corporatePackages}
+      />
+      <div className="grid grid-cols-2 gap-2">
+        {(
+          [
+            ["pt", "Personal Trainer"],
+            ["corporate", "Corporate"],
+          ] as const
+        ).map(([value, label]) => (
+          <Button
+            key={value}
+            type="button"
+            variant={mode === value ? "default" : "outline"}
+            className="h-11 text-base"
+            onClick={() => setMode(value)}
+          >
+            {label}
+          </Button>
+        ))}
+      </div>
+      {mode === "corporate" && <CorporateSaleForm packages={corporatePackages} />}
       <form
-        className="space-y-4"
+        className={mode === "pt" ? "space-y-4" : "hidden"}
         onSubmit={(e) => {
           e.preventDefault();
           submit();

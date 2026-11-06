@@ -18,13 +18,16 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { useCorporatePackageManager } from "@/features/corporate/kelola-paket-corporate-dialog";
+import type { CorporatePackageOption } from "@/features/corporate/queries";
 import { useProgramPtManager } from "./kelola-program-pt-dialog";
 import { useTrainerManager } from "./kelola-trainer-dialog";
 import type { PtProgramOption, TrainerOption } from "./queries";
 
-type Section = "trainer" | "program";
+type Section = "corporate" | "trainer" | "program";
 
 const SECTIONS: { value: Section; label: string }[] = [
+  { value: "corporate", label: "Paket Corporate" },
   { value: "trainer", label: "Data Trainer" },
   { value: "program", label: "Program Trainer" },
 ];
@@ -32,25 +35,29 @@ const SECTIONS: { value: Section; label: string }[] = [
 export function KelolaTrainerPaketTambahanDialog({
   trainers,
   programs,
+  corporatePackages,
 }: {
   trainers: TrainerOption[];
   programs: PtProgramOption[];
+  corporatePackages: CorporatePackageOption[];
 }) {
   const [open, setOpen] = useState(false);
-  const [section, setSection] = useState<Section>("trainer");
+  const [section, setSection] = useState<Section>("corporate");
   const trainer = useTrainerManager({ trainers });
   const program = useProgramPtManager({ programs });
-  const active = section === "trainer" ? trainer : program;
+  const corporate = useCorporatePackageManager({ packages: corporatePackages });
+  const active = { corporate, trainer, program }[section];
 
   function reset() {
     trainer.resetForm();
     program.resetForm();
+    corporate.resetForm();
   }
 
   return (
     <>
       <Dialog
-        open={open && !trainer.confirming && !program.confirming}
+        open={open && !trainer.confirming && !program.confirming && !corporate.confirming}
         onOpenChange={(next) => {
           setOpen(next);
           if (!next) reset();
@@ -92,6 +99,7 @@ export function KelolaTrainerPaketTambahanDialog({
       </Dialog>
       {trainer.confirmDialog}
       {program.confirmDialog}
+      {corporate.confirmDialog}
     </>
   );
 }

@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { AlertCircle, AlertTriangle, ScanLine } from "lucide-react";
+import { AlertCircle, AlertTriangle, Building2, ScanLine } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -19,6 +19,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { StatusBadge } from "@/components/ui/status-badge";
+import { CorporateCheckInDialog } from "@/features/corporate/corporate-check-in-dialog";
+import type { CorporateCheckInOption } from "@/features/corporate/queries";
 import { checkInAction, checkOutAction, lookupMemberAction } from "./actions";
 import { AttendanceTable, attendanceKey } from "./attendance-table";
 import { STATUS_KIND } from "./members-page";
@@ -28,9 +30,11 @@ import type { AttendanceRow, MemberSummary } from "./validation";
 export function CheckInPage({
   today,
   trainers,
+  corporateOptions,
 }: {
   today: AttendanceRow[];
   trainers: TrainerOption[];
+  corporateOptions: CorporateCheckInOption[];
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [text, setText] = useState("");
@@ -39,11 +43,12 @@ export function CheckInPage({
   const [member, setMember] = useState<MemberSummary | null>(null);
   const router = useRouter();
   const [pendingId, setPendingId] = useState<string>();
+  const [corporateOpen, setCorporateOpen] = useState(false);
 
   // Runs after the dialog has unmounted, so the scanner's next Enter lands in the scan input.
   useEffect(() => {
-    if (!member) inputRef.current?.focus();
-  }, [member]);
+    if (!member && !corporateOpen) inputRef.current?.focus();
+  }, [member, corporateOpen]);
 
   async function handleLookup(e: React.FormEvent) {
     e.preventDefault();
@@ -100,6 +105,24 @@ export function CheckInPage({
         </div>
         {error && <p className="text-base text-destructive">{error}</p>}
       </form>
+
+      <Button
+        type="button"
+        variant="outline"
+        className="h-11 text-base"
+        onClick={() => setCorporateOpen(true)}
+      >
+        <Building2 />
+        Check-In Corporate
+      </Button>
+
+      {corporateOpen && (
+        <CorporateCheckInDialog
+          options={corporateOptions}
+          returnFocusTo={inputRef}
+          onClose={() => setCorporateOpen(false)}
+        />
+      )}
 
       {member && (
         <CheckInDialog

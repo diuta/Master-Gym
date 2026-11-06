@@ -177,6 +177,52 @@ export const checkIns = pgTable(
   ],
 );
 
+export const corporatePackages = pgTable("corporate_packages", {
+  id: bigserial("id", { mode: "number" }).primaryKey(),
+  companyName: varchar("company_name", { length: 100 }).notNull(),
+  employeeCount: integer("employee_count").notNull(),
+  visitQuota: integer("visit_quota").notNull(),
+  months: integer("months").notNull(),
+  price: decimal("price", { precision: 14, scale: 2 }).notNull(),
+  isActive: boolean("is_active").notNull().default(true),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+export const corporatePurchases = pgTable("corporate_purchases", {
+  id: bigserial("id", { mode: "number" }).primaryKey(),
+  corporatePackageId: bigint("corporate_package_id", { mode: "number" })
+    .notNull()
+    .references(() => corporatePackages.id),
+  // Copied from the package at purchase time so later package edits don't rewrite history.
+  companyName: varchar("company_name", { length: 100 }).notNull(),
+  employeeCount: integer("employee_count").notNull(),
+  visitQuota: integer("visit_quota").notNull(),
+  price: decimal("price", { precision: 14, scale: 2 }).notNull(),
+  startDate: date("start_date", { mode: "string" }).notNull(),
+  endDate: date("end_date", { mode: "string" }).notNull(),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export const corporateCheckIns = pgTable(
+  "corporate_check_ins",
+  {
+    id: bigserial("id", { mode: "number" }).primaryKey(),
+    corporatePurchaseId: bigint("corporate_purchase_id", { mode: "number" })
+      .notNull()
+      .references(() => corporatePurchases.id),
+    employeeName: varchar("employee_name", { length: 100 }).notNull(),
+    phone: varchar("phone", { length: 20 }),
+    lockerNo: varchar("locker_no", { length: 20 }),
+    checkedInAt: timestamp("checked_in_at").notNull().defaultNow(),
+    checkedOutAt: timestamp("checked_out_at"),
+  },
+  (t) => [
+    index("corporate_check_ins_checked_in_at_idx").on(t.checkedInAt),
+    index("corporate_check_ins_purchase_id_idx").on(t.corporatePurchaseId),
+  ],
+);
+
 export const productCategories = pgTable("product_categories", {
   id: bigserial("id", { mode: "number" }).primaryKey(),
   name: varchar("name", { length: 100 }).notNull().unique(),
@@ -360,14 +406,17 @@ export const payments = pgTable(
     ),
     saleId: bigint("sale_id", { mode: "number" }).references(() => sales.id),
     purchaseId: bigint("purchase_id", { mode: "number" }).references(() => purchases.id),
+    corporatePurchaseId: bigint("corporate_purchase_id", { mode: "number" }).references(
+      () => corporatePurchases.id,
+    ),
     method: paymentMethodEnum("method").notNull(),
     amount: decimal("amount", { precision: 14, scale: 2 }).notNull(),
     paidAt: timestamp("paid_at").notNull().defaultNow(),
   },
   (t) => [
     check(
-      "payments_exactly_one_link",
-      sql`num_nonnulls(${t.membershipId}, ${t.visitId}, ${t.ptPurchaseId}, ${t.saleId}, ${t.purchaseId}) = 1`,
+      "payments_one_link_v3",
+      sql`num_nonnulls(${t.membershipId}, ${t.visitId}, ${t.ptPurchaseId}, ${t.saleId}, ${t.purchaseId}, ${t.corporatePurchaseId}) = 1`,
     ),
     index("payments_sale_id_idx").on(t.saleId),
     index("payments_purchase_id_idx").on(t.purchaseId),

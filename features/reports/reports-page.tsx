@@ -73,6 +73,7 @@ export function ReportsPage({
                   ["Membership", tiles.byKind.membership],
                   ["Visit", tiles.byKind.visit],
                   ["PT", tiles.byKind.pt],
+                  ["Corporate", tiles.byKind.corporate],
                 ] as const
               ).map(([name, v]) => (
                 <div key={name} className="flex justify-between gap-2">

@@ -30,7 +30,7 @@ export const PAYMENT_METHOD_LABELS: Record<PaymentMethod, string> = {
   transfer: "Transfer",
 };
 
-const price = (label: string) =>
+export const price = (label: string) =>
   z
     .number({ error: `${label} wajib diisi.` })
     .int()
@@ -47,7 +47,7 @@ export const PackageSchema = z.object({
 export type PackageInput = z.input<typeof PackageSchema>;
 
 const name = z.string().trim().min(1, { error: "Nama wajib diisi." }).max(100, { error: "Nama maksimal 100 karakter." });
-const phone = z
+export const phone = z
   .string()
   .transform((v, ctx) => {
     const p = normalizePhone(v);
@@ -74,7 +74,7 @@ const payments = z
 export const PaymentsSchema = payments;
 
 // Shared by every schema that takes money: rows must add up to the price exactly.
-function checkPayments(v: { payments: { amount: number }[]; price: number }, ctx: z.RefinementCtx) {
+export function checkPayments(v: { payments: { amount: number }[]; price: number }, ctx: z.RefinementCtx) {
   if (!paymentsMatchPrice(v.payments, v.price)) {
     ctx.addIssue({ code: "custom", path: ["payments"], message: "Total pembayaran harus sama dengan harga." });
   }
@@ -110,7 +110,7 @@ export const UpdateMemberSchema = z.object({
 export type UpdateMemberInput = z.input<typeof UpdateMemberSchema>;
 
 const memberId = z.number({ error: "Member wajib dipilih." }).int();
-const lockerNo = z
+export const lockerNo = z
   .string()
   .trim()
   .max(20, { error: "Nomor loker maksimal 20 karakter." })
@@ -131,7 +131,7 @@ export const CheckInSchema = z
 export type CheckInInput = z.input<typeof CheckInSchema>;
 
 export const CheckOutSchema = z.object({
-  kind: z.enum(["member", "visitor"]),
+  kind: z.enum(["member", "visitor", "corporate"]),
   id: z.number().int().positive(),
 });
 export type CheckOutInput = z.input<typeof CheckOutSchema>;
@@ -199,7 +199,7 @@ export type MemberSummary = {
 };
 
 export type AttendanceRow = {
-  kind: "member" | "visitor";
+  kind: "member" | "visitor" | "corporate";
   id: number;
   at: Date;
   checkedOutAt: Date | null;
@@ -207,6 +207,7 @@ export type AttendanceRow = {
   memberNo: string | null;
   lockerNo: string | null;
   trainerName: string | null;
+  companyName: string | null;
 };
 
 export type ActionResult<T = undefined> =

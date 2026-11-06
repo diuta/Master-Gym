@@ -2,7 +2,7 @@ import type { PaymentMethod } from "@/features/membership/validation";
 
 export type Method = "cash" | "bank";
 export type MethodFilter = "all" | Method;
-export type IncomeKind = "sale" | "membership" | "visit" | "pt";
+export type IncomeKind = "sale" | "membership" | "visit" | "pt" | "corporate";
 export type Kind = IncomeKind | "purchase" | "expense";
 
 export type Movement = {
@@ -77,7 +77,7 @@ export function omzet(rows: Movement[], f: MethodFilter): number {
 }
 
 export function omzetByKind(rows: Movement[], f: MethodFilter): Record<IncomeKind, number> {
-  const out: Record<IncomeKind, number> = { sale: 0, membership: 0, visit: 0, pt: 0 };
+  const out: Record<IncomeKind, number> = { sale: 0, membership: 0, visit: 0, pt: 0, corporate: 0 };
   for (const r of incomeRows(rows, f)) out[r.kind as IncomeKind] += r.amount;
   return out;
 }

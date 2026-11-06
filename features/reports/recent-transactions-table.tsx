@@ -16,6 +16,7 @@ const KIND_LABELS: Record<IncomeKind, string> = {
   membership: "Membership",
   visit: "Visit",
   pt: "PT",
+  corporate: "Corporate",
 };
 
 export function RecentTransactionsTable({ rows }: { rows: RecentTx[] }) {

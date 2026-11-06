@@ -7,27 +7,37 @@
 Every logged-in page uses the shell from `app/(app)/layout.tsx`:
 
 ```
-┌──────────────┬──────────────────────────────────────────┐
-│ [M] Master   │ [☰]  |  Master Gym                         │ ← header (h-12): sidebar toggle
-│     Gym      ├──────────────────────────────────────────┤
-│     Kasir    │                                            │
-│              │   <main> page content (p-6)               │
-│ DASHBOARD    │                                            │
-│  Dashboard   │                                            │
-│ MEMBERSHIP   │                                            │
-│  Absen …     │                                            │
-│ …            │                                            │
-│──────────────│                                            │
-│ KA Kasir     │                                            │
-│ ⎋ Keluar     │                                            │
-└──────────────┴──────────────────────────────────────────┘
+Desktop (≥ 1024px):
+┌──────────────────────────────────────────────────────────────────┐
+│ [M] Master Gym  Dashboard  Membership ▾  Inventori  …     [KA ▾] │ ← sticky top bar (h-14)
+├──────────────────────────────────────────────────────────────────┤
+│   <main> page content (p-6)                                      │
+│            ┌──────────────────┐                                  │
+│            │ Absen            │ ← a ▾ group opens on click       │
+│            │ Riwayat Absen    │                                  │
+│            │ Data Member      │                                  │
+│            │ Pembayaran       │                                  │
+│            └──────────────────┘                                  │
+└──────────────────────────────────────────────────────────────────┘
+
+Phone and tablet (< 1024px):
+┌──────────────────────────────┐      ┌──────────────┐
+│ [☰] [M] Master Gym      [KA] │  ☰ → │ Menu         │ ← slide-out panel (left)
+├──────────────────────────────┤      │ DASHBOARD    │
+│   <main> page content        │      │  Dashboard   │
+│                              │      │ MEMBERSHIP   │
+└──────────────────────────────┘      │  Absen …     │
+                                      └──────────────┘
 ```
 
-- **Sidebar** (`components/app-sidebar.tsx` + `components/ui/sidebar.tsx`): labelled groups with flat links, like Sembako. No dropdowns.
-  - Desktop (≥ 768px): fixed on the left, 16rem wide. Collapses to a 3rem icon strip with the header's toggle button or **Ctrl/Cmd + B**. The open/closed state is remembered in the `sidebar_state` cookie for 7 days, and the layout reads it so the page renders in the right state.
-  - Phone (< 768px, from `hooks/use-mobile.ts`): hidden; the toggle opens it as a slide-out panel (18rem).
-  - The current page's link is highlighted (`isActive` when `pathname === href`).
-  - Collapsed to icons, each link shows its label as a tooltip.
+- **Navbar** (`components/app-navbar.tsx`): the spec asks for the menu on top, not on the left.
+  - Each section from `lib/nav.ts` becomes one item: a section with one page is a plain link with that page's name; a section with several pages becomes a dropdown named after the section (`MEMBERSHIP` → "Membership ▾"). Dropdowns open on click.
+  - Kasir: Dashboard · Membership ▾ · Inventori · Penjualan ▾ · Pembelian ▾ · Pengeluaran. Superadmin: Dashboard ▾ (Home, Laporan) · Pengaturan Harga · Riwayat Penjualan · Riwayat Pembelian · Pengeluaran · Pengaturan Akun.
+  - The current page's link is highlighted (`pathname === href`). A dropdown is highlighted when one of its pages is open, and that page is marked inside it.
+  - User menu (right): initials plus name and role. It opens to show name, email, role and **Keluar**.
+  - The kasir bar keeps 16px text at every width. The superadmin bar has long link names, so below 1280px it is compact (14px text, less padding, initials only in the user menu) to fit at 1024px (`isNavCompact(role)` in `lib/nav.ts`).
+  - Below 1024px the links are replaced by ☰, which opens a `Sheet` from the left with the full grouped list (headings + icon links). Tapping a link closes it.
+  - The bar is sticky and never takes focus, so the Absen scan input keeps its autofocus.
 - **Menus** come from `lib/nav.ts` (see [AUTH.md](./AUTH.md) for which role sees what).
 - **Login page** (`features/authentication/login-page.tsx`) has no shell: a centred card.
 
@@ -47,7 +57,7 @@ The app is **dark only**. Colours are CSS variables in the `:root` block of `app
 | `--destructive` | Delete / errors | Red |
 | `--success`, `--warning` | Status colours | Green, amber |
 | `--border`, `--input` | Lines and input borders | White at 15–20% |
-| `--sidebar*` | Sidebar background, active item, borders | Darkest navy; orange for the logo badge |
+| `--sidebar*` | Unused since the top navbar replaced the sidebar; kept in the theme | Darkest navy; orange |
 | `--chart-1..5` | Charts (later) | Orange, blue, green, amber, grey |
 | `--radius` | Corner rounding | 0.625rem |
 
@@ -71,9 +81,8 @@ These are **shadcn/ui** components (`base-nova` style, built on **Base UI**). Th
 | `alert-dialog.tsx` | "Are you sure?" confirmations before delete/cancel |
 | `alert.tsx` | Inline messages (`variant="destructive"` for errors, as on the login page) |
 | `badge.tsx` | Small labels |
-| `dropdown-menu.tsx` | Menus that open from a button |
-| `sheet.tsx` | Side panels (used by the mobile sidebar) |
-| `sidebar.tsx` | The sidebar system (provider, groups, menu buttons, rail, mobile sheet) |
+| `dropdown-menu.tsx` | Menus that open from a button (navbar groups, user menu) |
+| `sheet.tsx` | Side panels (used by the navbar's ☰ menu) |
 | `tooltip.tsx` | Hover hints. Needs `TooltipProvider`, which the root layout provides |
 | `collapsible.tsx`, `separator.tsx`, `skeleton.tsx` | Expand/collapse, divider lines, loading placeholders |
 
@@ -84,7 +93,7 @@ These are **shadcn/ui** components (`base-nova` style, built on **Base UI**). Th
 | `currency-input.tsx` | Rupiah input: shows "Rp" and thousands separators (`150.000`) while you type, and keeps the raw digits (`150000`). Pass `name` to also submit a hidden field with the raw digits in a `<form>`, or use `value` + `onChange(raw)` |
 | `wizard.tsx` | Multi-step forms: `useWizard(steps)` (index, `goNext`, `goBack`, `goTo`, `reset`, `isFirst`/`isLast`), `WizardStepIndicator` ("step 2 of 4" with labels), `WizardStep`, `WizardNav` (big Back/Next buttons), `onWizardEnterAdvance` (Enter = next). For the inventory, sales and purchase wizards |
 | `empty-state.tsx` | Icon + title + description for "nothing here" |
-| `status-badge.tsx` | Coloured badge with icon + text for statuses: `success`, `cancelled`, `paid`, `unpaid`, `out_of_stock`, `low_stock`, `in_stock`. Membership: `member_active`, `member_expiring`, `member_expired` (Aktif / Habis ≤ 7 Hari / Sudah Habis). Attendance: `member`, `visitor` (Member / Visitor). Add new statuses here |
+| `status-badge.tsx` | Coloured badge with icon + text for statuses: `success`, `cancelled`, `paid`, `unpaid`, `out_of_stock`, `low_stock`, `in_stock`. Membership: `member_active`, `member_expiring`, `member_expired` (Aktif / Habis ≤ 7 Hari / Sudah Habis). Attendance: `member`, `visitor`, `corporate` (Member / Visitor / Corporate, Building2 icon). Add new statuses here |
 | `lib/format.ts` (not in `ui/`) | `rupiah` (an `Intl.NumberFormat` giving "Rp150.000") and `formatDateId("2026-10-28")` (Indonesian date). Use these instead of formatting money or dates by hand |
 | `sortable-th.tsx` | A table header cell that sorts on click. Use with `hooks/use-sort.ts` |
 | `required-mark.tsx` | The red `*` after a required field's label |

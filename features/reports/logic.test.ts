@@ -92,7 +92,13 @@ describe("report numbers", () => {
     expect(omzet(rows, "all")).toBe(310000);
     expect(omzet(rows, "cash")).toBe(303333);
     expect(omzet(rows, "bank")).toBe(6667);
-    expect(omzetByKind(rows, "all")).toEqual({ sale: 10000, membership: 300000, visit: 0, pt: 0 });
+    expect(omzetByKind(rows, "all")).toEqual({
+      sale: 10000,
+      membership: 300000,
+      visit: 0,
+      pt: 0,
+      corporate: 0,
+    });
   });
   it("cost, expenses and profit reconcile across methods", () => {
     expect(costOfGoods(rows, "all")).toBe(5001);
@@ -234,5 +240,32 @@ describe("productProfit", () => {
     expect(a.qty).toBeCloseTo((3 * 3333) / 10000, 10);
     const profits = cash.map((r) => r.profit);
     expect(profits).toEqual([...profits].sort((x, y) => y - x));
+  });
+});
+
+describe("corporate income", () => {
+  const rows = (): Movement[] => [
+    mv({ direction: "in", kind: "corporate", docId: 7, method: "cash", amount: 300000 }),
+    mv({ direction: "in", kind: "corporate", docId: 7, method: "bank", amount: 200000 }),
+    mv({ direction: "in", kind: "sale", docId: 8, method: "cash", amount: 1000 }),
+  ];
+
+  it("counts toward omzet and the corporate breakdown, with cash + bank = all", () => {
+    const all = rows();
+    expect(omzet(all, "all")).toBe(501000);
+    expect(omzetByKind(all, "all").corporate).toBe(500000);
+    expect(omzet(all, "cash") + omzet(all, "bank")).toBe(omzet(all, "all"));
+  });
+
+  it("is one transaction, but not a product sale", () => {
+    expect(transactionCount(rows(), "all")).toBe(2);
+    expect(saleCount(rows(), "all")).toBe(1);
+  });
+
+  it("shows once in recent transactions with both methods", () => {
+    const r = recentTransactions(rows()).filter((t) => t.kind === "corporate");
+    expect(r).toHaveLength(1);
+    expect(r[0].total).toBe(500000);
+    expect(r[0].methods).toEqual(["cash", "bank"]);
   });
 });

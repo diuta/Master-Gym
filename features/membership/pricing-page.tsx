@@ -9,6 +9,8 @@ import { CurrencyInput } from "@/components/ui/currency-input";
 import { Label } from "@/components/ui/label";
 import { RequiredMark } from "@/components/ui/required-mark";
 import { saveVisitPriceAction } from "./actions";
+import { KelolaPaketCorporateDialog } from "@/features/corporate/kelola-paket-corporate-dialog";
+import type { CorporatePackageOption } from "@/features/corporate/queries";
 import { KelolaPaketDialog } from "./kelola-paket-dialog";
 import { KelolaProgramPtDialog } from "./kelola-program-pt-dialog";
 import { KelolaTrainerDialog } from "./kelola-trainer-dialog";
@@ -19,11 +21,13 @@ export function PricingPage({
   visitPrice,
   trainers,
   ptPrograms,
+  corporatePackages,
 }: {
   packages: PackageOption[];
   visitPrice: number | null;
   trainers: TrainerOption[];
   ptPrograms: PtProgramOption[];
+  corporatePackages: CorporatePackageOption[];
 }) {
   const router = useRouter();
   const [visit, setVisit] = useState(visitPrice === null ? "" : String(visitPrice));
@@ -64,6 +68,7 @@ export function PricingPage({
           <KelolaPaketDialog packages={packages} />
           <KelolaTrainerDialog trainers={trainers} />
           <KelolaProgramPtDialog programs={ptPrograms} />
+          <KelolaPaketCorporateDialog packages={corporatePackages} />
         </div>
       </div>
 
